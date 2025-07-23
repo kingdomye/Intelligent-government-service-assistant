@@ -7,7 +7,7 @@
 
 import logging
 import os
-import random
+import pickle
 import time
 import io
 from io import BytesIO
@@ -49,12 +49,12 @@ if not os.path.isdir(face_data_path):
 # 初始化检测器和特征提取模型
 try:
     # 加载预训练的人脸特征提取模型（OpenFace）
-    model_path = "nn4.small2.v1.t7"
-    if not os.path.exists(model_path):
-        logger.error(f"特征提取模型文件不存在: {model_path}")
+    nn_model_path = "nn4.small2.v1.t7"
+    if not os.path.exists(nn_model_path):
+        logger.error(f"特征提取模型文件不存在: {nn_model_path}")
         logger.info("请从 https://cmusatyalab.github.io/openface/models-and-accuracies/ 下载模型")
         exit()
-    embedder = cv2.dnn.readNetFromTorch(model_path)
+    embedder = cv2.dnn.readNetFromTorch(nn_model_path)
 
     # 加载多个检测器以提高检测鲁棒性
     detector_paths = [
@@ -217,6 +217,7 @@ def load_existing_data():
             try:
                 # 尝试访问classes_属性来检查模型是否已训练
                 if hasattr(clf, 'classes_'):
+                    logger.info("模型成功返回")
                     return clf, le
                 else:
                     logger.warning("已存在的模型未经过训练，将创建新模型")
@@ -273,15 +274,22 @@ def cv2_train(imgs_bin, user_id, min_acc=0.6):
 
     if not new_features or not new_labels:
         logger.error("没有有效的训练数据，无法进行训练")
-        exit()
+        return False
+
+    # 检查是否是首次训练且只有一个类别
+    clf, le = load_existing_data()
+    # 检查是否是首次训练且只有一个类别
+    if clf is None and le is None and len(set(new_labels)) == 1:
+        logger.info("检测到单类别数据，添加默认'未知'类别以满足SVM训练要求")
+        # 可以从现有图片中生成一些变体作为"未知"类别的样本
+        # 这里简单复制并轻微修改部分样本作为未知类别
+        unknown_features = [f * 1.1 for f in new_features[:2]]  # 简单修改特征
+        new_features.extend(unknown_features)
+        new_labels.extend(['unknown'] * len(unknown_features))
 
     try:
-        # 加载已有的模型和标签编码器
-        clf, le = load_existing_data()
-
         # 如果没有已存在的模型，则创建新的
         if clf is None or le is None:
-            logger.info("")
             le = LabelEncoder()
             encoded_labels = le.fit_transform(new_labels)
             clf = SVC(kernel='linear', probability=True)
@@ -299,8 +307,9 @@ def cv2_train(imgs_bin, user_id, min_acc=0.6):
             # 注意：SVM不直接存储训练数据，所以我们需要保留历史数据或重新加载
             # 这里我们假设只使用新数据进行增量训练
             # 对于更优的增量训练，应该保留历史特征和标签
+            logger.info("模型开始训练...")
             clf.fit(new_features, new_encoded_labels)
-
+            logger.info("模型训练完成！")
             # 更新标签编码器
             le = merged_le
 
@@ -314,23 +323,24 @@ def cv2_train(imgs_bin, user_id, min_acc=0.6):
 
         # 计算训练信息
         elapsed_time = time.time() - start_time
+
         logger.info(
             f"训练完成！模型共包含 {unique_ids} 个人脸，"
             f"本次新增 {len(new_features)} 个样本，"
             f"耗时 {elapsed_time:.2f} 秒。"
             f"模型已保存到 {model_path}，标签编码器已保存到 {le_path}"
         )
-
-        print(new_features, new_labels)
-        test_samples = random.sample(new_features, 1)
-        test_samples = []
-
+        return True
     except Exception as e:
         logger.error(f"训练或保存模型时出错: {e}")
         return False
 
 
 if __name__ == "__main__":
+    img_1_1_path = Image.open("./facedata/12_1075.jpg")
+    img_1_2_path = Image.open("./facedata/12_1076.jpg")
+    img_1_3_path = Image.open("./facedata/12_1079.jpg")
+
     def img_to_bin(image):
         img_bin = io.BytesIO()
         image.save(img_bin, format='JPEG')
@@ -338,7 +348,59 @@ if __name__ == "__main__":
 
         return image_bytes
 
-    img1 = Image.open("./facedata/test.jpg")
-    img2 = Image.open("./facedata/test1.jpg")
-    imgs_bin = [img_to_bin(img1), img_to_bin(img2)]
-    cv2_train(imgs_bin, 1)
+    img_1_1_bin = img_to_bin(img_1_1_path)
+    img_1_2_bin = img_to_bin(img_1_2_path)
+    img_1_3_bin = img_to_bin(img_1_3_path)
+
+    imgs_bin = [img_1_1_bin, img_1_2_bin, img_1_3_bin]
+
+    cv2_train(imgs_bin, user_id=3)
+
+    # num_processes = min(cpu_count(), len(imgs_bin))
+    # with Pool(num_processes) as pool:
+    #     results = pool.map(process_single_image, imgs_bin)
+    # valid_results = [(results[0], 1), (results[1], 1), (results[2], 1), (results[3], 2), (results[4], 2), (results[5], 2)]
+    # features, labels = zip(*valid_results)
+    # features = list(features)
+    # labels = list(labels)
+    #
+    # le = LabelEncoder()
+    # encoded_labels = le.fit_transform(labels)
+    #
+    # # 训练SVM分类器
+    # clf = SVC(kernel='linear', probability=True)
+    # clf.fit(features, encoded_labels)
+    #
+    # # 模型和标签编码器路径
+    # model_path = os.path.join(trainer_dir, 'svm_model.pkl')
+    # le_path = os.path.join(trainer_dir, 'label_encoder.pkl')
+    #
+    # joblib.dump(clf, model_path)
+    # joblib.dump(le, le_path)
+    #
+    # logger.info(
+    #     f"使用了 {len(features)} 个样本，"
+    #     f"模型已保存到 {model_path}，标签编码器已保存到 {le_path}"
+    # )
+
+    # def get_jpg_files_relative_path(root_dir):
+    #     jpg_files = []
+    #
+    #     # 遍历目录及其子目录
+    #     for dirpath, dirnames, filenames in os.walk(root_dir):
+    #         for filename in filenames:
+    #             # 检查文件扩展名是否为jpg（不区分大小写）
+    #             if filename.lower().endswith('.jpg'):
+    #                 # 获取文件的绝对路径
+    #                 abs_path = os.path.join(dirpath, filename)
+    #                 # 转换为相对路径（相对于root_dir）
+    #                 rel_path = os.path.relpath(abs_path, root_dir)
+    #                 jpg_files.append(rel_path)
+    #
+    #     return jpg_files
+    #
+    # test_dir = './facedata'
+    # image_paths = get_jpg_files_relative_path(test_dir)
+    # full_image_paths = [os.path.join(test_dir, path) for path in image_paths]
+    # imgs_bin = [img_to_bin(Image.open(path)) for path in full_image_paths]
+    # cv2_train(imgs_bin, user_id=8)
