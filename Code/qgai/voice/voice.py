@@ -4,7 +4,7 @@ import torch
 
 import time
 import whisper
-from opencc import OpenCC
+from voice.opencc import OpenCC
 import os
 import numpy as np
 
@@ -43,10 +43,10 @@ def text2voice(text):
     print("<voice>:get voice to text requirement")
 
 
-audio = open("晋升后交谈1.wav", "rb").read()
+#audio = open("晋升后交谈1.wav", "rb").read()
 
 
-print(voice2text(bin_decode(audio)))
+#print(voice2text(bin_decode(audio)))
 
 
 
