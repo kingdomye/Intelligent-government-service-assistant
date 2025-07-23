@@ -1,0 +1,38 @@
+{
+  "name":null,
+  "gender":null,
+  "nationality":null,
+  "phone":null,
+  "id_card":null,
+  "native_place":null,
+  "birth":null,
+  "email":null,
+  "career":null,
+  "address":null,
+  "hukou":null,
+  "political_status":null,
+  "marital_status":null,
+  "religion":null,
+  "education":null,
+
+
+  "necessary": {
+    "name":null,
+    "gender":null,
+    "nationality":null,
+    "phone":null,
+    "id_card":null
+  },
+  "addition": {
+    "native_place":null,
+    "birth":null,
+    "email":null,
+    "career":null,
+    "address":null,
+    "hukou":null,
+    "political_status":null,
+    "marital_status":null,
+    "religion":null,
+    "education":null
+  }
+}
