@@ -1,5 +1,7 @@
-import server.console
+import server
+
+print(b"adasdasd".decode("utf8"))
 
 if __name__ == '__main__':
-    server.console.log("Welcome to the python API of AI for government assistants", __name__)
-    server.console.run()
+    server.log("Welcome to the python API of AI for government assistants", __name__)
+    server.run()
