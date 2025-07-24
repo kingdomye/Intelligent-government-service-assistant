@@ -1,21 +1,20 @@
-import librosa
 import io
+import os
 import torch
 
-import time
 import whisper
+import librosa
 from voice.opencc import OpenCC
-import os
-import numpy as np
 
+from server.console import log
 
-model_root=R"E:\Program\$knowlage\$AI\Model\whisper"
+model_root=R"E:\Program\$knowlage\$AI\Model\whisper-STT"
 model_level="medium.pt"
 
 
-print("<voice>:voice loading checkpoint "+model_level+" ...")
+log("voice loading checkpoint "+model_level+" ...","voice")
 model = whisper.load_model(os.path.join(model_root, model_level))
-print("<voice>:loading successful")
+log("loading successful","voice")
 
 cc = OpenCC('t2s')
 
@@ -23,30 +22,32 @@ cc = OpenCC('t2s')
 def bin_decode(bin_array,code_type="wav"):
     if code_type == "wav":
         PCM_array,_ = librosa.load(
-            io.BytesIO(audio),  # 二进制数据转文件流
+            io.BytesIO(bin_array),  # 二进制数据转文件流
             sr=16000,  # 可选：重采样到 16kHz（Whisper 推荐）
             mono=True  # 转为单声道
         )
         return PCM_array
 
 def voice2text(audio_array):
-    print("<voice>:get voice to text requirement")
+    log("get voice to text requirement","voice")
 
 
     result = model.transcribe(audio=torch.tensor(audio_array, dtype=torch.float32))
     content = result["text"]
 
-    print("<voice>:transcribe successful!")
+    log("transcribe successful!","voice")
     return cc.convert(content)
 
 def text2voice(text):
-    print("<voice>:get voice to text requirement")
+    log("text2voice start","voice")
 
 
 #audio = open("晋升后交谈1.wav", "rb").read()
 
 
 #print(voice2text(bin_decode(audio)))
+
+
 
 
 
