@@ -5,7 +5,7 @@ import os
 import json
 import re
 
-load_dotenv(r"D:\Pycharm\PyCharm 2024.3.1.1\中期考核\Inquering and GetReply\key.env")  # 从.env文件加载环境变量
+load_dotenv(r"qna_key.env")  # 从.env文件加载环境变量
 
 api_key = os.getenv('API_KEY')
 headers = {"Authorization": f"Bearer {api_key}"}
@@ -43,7 +43,6 @@ def Inquiring(data_dict):
         return None
 
 def Get_Answer(text, required_field):
-
     if re.search(r'[123456789一二三四五六七八九]{4,}', text):
         result = re.findall(r'[123456789一二三四五六七八九]{4,}', text)
         result = [p for p in result if len(p) == 11]
