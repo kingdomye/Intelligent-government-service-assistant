@@ -1,7 +1,15 @@
 import json
 import os
 
+
+from datamining.deal_flow_api import deal_flow_a
+from datamining.deal_flow_local import deal_flow_l
 from datamining.deal_flow_api import deal_flow
+from server.console import log
+# from deal_flow_api import deal_flow_a
+# from deal_flow_local import deal_flow_l
+
+
 
 table_mark={
     "<IMG>":0,
@@ -73,14 +81,31 @@ class DataMiningAgent:
         except KeyError:
             return '-1'
 
-    def get_flow(self, idx:int, user_info:dict)->str:
-        try:
-            flow = deal_flow(user_info, self.get_org_flow(idx))
-            return flow
-        except KeyError:
-            return '-1'
+    def get_flow(self, idx:int, user_info:dict, mod='remote')->str:
+        """
+        Get final flow
+        :param idx: index(view in 'name_to_idx.json')
+        :param user_info: user info
+        :param mod: local or remote (default remote)
+        :return: flow / error:-1 / mod error
+        """
+        user_info['业务类型'] = self.idx_to_label(idx)
+        if mod == 'remote':
+            try:
+                flow = deal_flow_a(user_info, self.get_org_flow(idx))
+                return flow
+            except KeyError:
+                return '-1'
+        elif mod == 'local':
+            try:
+                flow = deal_flow_l(user_info, self.get_org_flow(idx))
+                return flow
+            except KeyError:
+                return '-1'
+        return 'mod error'
+
 
 # # 调试
-# data = DataMiningAgent()
+#data = DataMiningAgent()
 # print(data.get_tables(0))
-# print(data.get_flow(0))
+#print(data.get_flow(0))

@@ -2,9 +2,12 @@ import requests
 import json
 
 
-def deal_flow(user_input, raw_text:str)->str:
+def deal_flow_a(user_input, raw_text:str)->str:
     """
     调用华为云的 deepseekAPI 处理流程
+    :param user_input: user info
+    :param raw_text: original flow
+    :return: final flow
     """
     url = "https://maas-cn-southwest-2.modelarts-maas.com/v1/infers/271c9332-4aa6-4ff5-95b3-0cf8bd94c394/v1/chat/completions"
     key = "44NLpI9-4ZiWBR7Q-g1PAnVp7Ea7hiCaJyZSIfa8cMyudVPG9yqHSO5jkuRgTja8WIobHcqyQM-PT3cpZ2H82Q"
@@ -38,7 +41,10 @@ def deal_flow(user_input, raw_text:str)->str:
         'Authorization': f'Bearer {key}'
     }
 
-    response = requests.request("POST", url, headers=headers, data=payload.encode("utf-8"))
+    try:
+        response = requests.request("POST", url, headers=headers, data=payload.encode("utf-8"))
+    except requests.exceptions.ConnectionError:
+        return 'connection error'
     # print(response.text)
     resp = response.json()
     if 'choices' in resp:
@@ -50,22 +56,22 @@ def deal_flow(user_input, raw_text:str)->str:
     else:
         return '-2'
 
-
-def debug():
-    user_input = {
-        "姓名": "张三",
-        "年龄": 18,
-        "居住地": "广州",
-        "户口": "北京",
-    }
-    flow_path = 'flows.json'
-    business_id = '1'
-    # 原始流程文本（从 flows.json 中加载）
-    with open(flow_path, mode='r', encoding='utf-8') as f:
-        flows = json.load(f)
-        raw_text = flows[business_id]
-
-    output = deal_flow(user_input, raw_text)
-    print(output)
+#
+# def debug():
+#     user_input = {
+#         "姓名": "张三",
+#         "年龄": 18,
+#         "居住地": "广州",
+#         "户口": "北京",
+#     }
+#     flow_path = 'flows.json'
+#     business_id = '1'
+#     # 原始流程文本（从 flows.json 中加载）
+#     with open(flow_path, mode='r', encoding='utf-8') as f:
+#         flows = json.load(f)
+#         raw_text = flows[business_id]
+#
+#     output = deal_flow_a(user_input, raw_text)
+#     print(output)
 
 # debug()
