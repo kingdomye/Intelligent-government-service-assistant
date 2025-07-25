@@ -24,9 +24,9 @@ class FaceModelLoader:
 
     def __init__(self):
         # 初始化路径
-        self.trainer_dir = './face_trainer_bayes'
-        self.face_data_path = './facedata'
-        self.nn_model_path = "nn4.small2.v1.t7"
+        self.trainer_dir = 'face_trainer_bayes'
+        self.face_data_path = 'facedata'
+        self.nn_model_path = "face_trainer_bayes/nn4.small2.v1.t7"
 
         # 模型和数据文件路径
         self.model_path = os.path.join(self.trainer_dir, 'bayes_model.pkl')
