@@ -1,8 +1,3 @@
-import io
-import base64
-from PIL import Image
-import numpy as np
-
-img = Image.open("./facedata/12_1075.jpg")
-img = np.array(img)
-print(img)
+a = [1, 2, 2, 2, 3]
+b = a.count(2)
+print(b)
