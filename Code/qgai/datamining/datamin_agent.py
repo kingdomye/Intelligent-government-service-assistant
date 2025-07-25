@@ -1,11 +1,8 @@
 import json
 import os
 
-<<<<<<< Updated upstream
-=======
 from datamining.deal_flow_api import deal_flow
 
->>>>>>> Stashed changes
 table_mark={
     "<IMG>":0,
     "<SIG>":1,
@@ -64,8 +61,9 @@ class DataMiningAgent:
         except KeyError:
             return ['-1']
 
-    def get_flow(self, idx)->str:
-        """Get flow by index
+    def get_org_flow(self, idx:int)->str:
+        """
+        Get flow by index
         :param idx: flow index(view in 'name_to_idx.json')
         :return: flow / error:-1
         """
@@ -75,15 +73,14 @@ class DataMiningAgent:
         except KeyError:
             return '-1'
 
-    def __getitem__(self, idx: int)->(str, list):
-        """
-        Get basic data by idx
-        :param idx: index of business
-        :return: flow: str, tables: list of dicts
-        """
-        return self.get_flow(idx), self.get_tables(idx)
+    def get_flow(self, idx:int, user_info:dict)->str:
+        try:
+            flow = deal_flow(user_info, self.get_org_flow(idx))
+            return flow
+        except KeyError:
+            return '-1'
 
-
-# ## 调试
+# # 调试
 # data = DataMiningAgent()
-# print(data[666])
+# print(data.get_tables(0))
+# print(data.get_flow(0))

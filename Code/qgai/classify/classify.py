@@ -30,12 +30,6 @@ def classify(text,label_dict):
     response=requests.post(API_URL,headers=headers,json=payload)
     # 获取响应结果
     result=response.json()
-<<<<<<< Updated upstream
-    # 获取分类结果中的第一个标签
-    top_label=result["labels"][0]
-    # 返回对应的标签
-    return label_dict[top_label]
-=======
     print("classify 3")
     top_label=result["labels"][0]
     top_score=result["scores"][0]
@@ -48,7 +42,6 @@ def classify(text,label_dict):
     else:
         # 返回对应的标签
         return label_dict[top_label]
->>>>>>> Stashed changes
 
 #下一类一个直接分
 #这个全局变量，后面修改...
@@ -56,12 +49,6 @@ type_dic={
     "身份证":0,
     "户口本":1,
 }
-<<<<<<< Updated upstream
-#示例(可忽略)
-result=classify("我要办理身份证",type_dic)
-print(result)
-=======
 
 
-#print(classify("我该上哪里去办理身份证",type_dic))
->>>>>>> Stashed changes
+print(classify("我该上哪里去办理身份证",type_dic))

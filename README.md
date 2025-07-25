@@ -16,6 +16,23 @@
 | 6    | [分工总结文档](./doc/06_分工总结文档)     |
 | 7    | [答辩PPT](./doc/07_答辩PPT)               |
 
+### 前端部署
+
+1. 进入 front 文件夹
+2. 安装依赖包
+
+```bash
+cd front
+npm init
+npm install vite --save-dev
+```
+
+3. 用 vite 运行
+
+```bash
+npm run dev
+```
+
 ## 许可证（License）
 
 本项目采用 [MIT 许可证](LICENSE) 开源，您可以自由地使用、复制、修改、合并、发布、分发、再许可和/或销售本软件的副本，前提是符合以下条件：

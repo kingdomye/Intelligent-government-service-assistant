@@ -1,0 +1,156 @@
+.chatWrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.initialState {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 20px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 40px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.title:hover {
+  animation: colorJump 5s infinite;
+}
+
+@keyframes colorJump {
+  0% {
+    color: #ff6b6b;
+  }
+  14% {
+    color: #4ecdc4;
+  }
+  28% {
+    color: #45b7d1;
+  }
+  42% {
+    color: #96ceb4;
+  }
+  56% {
+    color: #ffeaa7;
+  }
+  70% {
+    color: #dda0dd;
+  }
+  84% {
+    color: #98d8c8;
+  }
+  100% {
+    color: #ff6b6b;
+  }
+}
+
+.activatedLayout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chatContent {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chatContent::-webkit-scrollbar {
+  display: none;
+}
+
+.chatMessage {
+  display: flex;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.messageLeft {
+  justify-content: flex-start; /* 默认AI靠左 */
+}
+
+.messageRight {
+  justify-content: flex-end; /* 用户消息靠右 */
+}
+
+.chatMessageUser {
+  background-color: #007aff;
+  color: white;
+  padding: 12px 16px;
+  border-radius: 18px 18px 4px 18px;
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 70%;
+}
+
+.chatMessageAI {
+  background-color: #f1f3f5;
+  color: #333;
+  padding: 12px 16px;
+  border-radius: 18px 18px 18px 4px;
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 70%;
+}
+
+.chatFooter {
+  padding: 20px;
+  border-top: 1px solid #e1e5e9;
+  background-color: #ffffff;
+}
+
+.initialInputContainer {
+  width: 50%;
+}
+
+.inputArea {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.textArea {
+  resize: none;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chatActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.voiceButton {
+  border-radius: 8px;
+}
+
+.sendButton {
+  border-radius: 8px;
+}
+
+.listening {
+  background-color: #ff4d4f !important;
+  border-color: #ff4d4f !important;
+  color: white !important;
+}

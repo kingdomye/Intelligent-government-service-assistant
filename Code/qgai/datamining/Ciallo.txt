@@ -4,7 +4,7 @@ class DataMiningAgent
 
 表格见 tables.json
 索引见 name_to_idx.json
-流程见 flows.json
+原始流程见 flows.json
 
 空值''
 图片<IMG>
@@ -20,5 +20,11 @@ class DataMiningAgent
 
 [籍贯, 出生日期, 居住地址, 户口所在地, 政治面貌, 婚姻状况, 宗教信仰, 学历, 职业]
 
-整个Agent用于模拟与政务平台对接，获取流程、表单
+suoyo有用的代码在datamin_agent.py
+剩下的除了json都无需调用
+
+ERROR CODE:
+-1  idx error
+-2  api or net error
+-3  user info error
 
