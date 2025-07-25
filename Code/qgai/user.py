@@ -1,7 +1,7 @@
 import threading
 import json
 import asyncio
-
+import time
 
 import inquiry
 import datamining
@@ -80,6 +80,78 @@ class TableFiller:
 
         return table
 
+async def testtt():
+    print("testtt")
+
+class UserAsyncModel:
+    """
+    在其他线程的异步操作上分支出一个新的异步的操作，并在执行时加入循环
+    """
+    processing = -2147483648
+
+
+    def __init__(self, task,loop,wait_time=0.5):
+        """
+        创建一个异步操作模块
+        :param task: 一个函数，必须为async的异步函数
+        """
+        self.__result = None
+
+        self.__task = task
+        self.__loop = loop
+
+        self.wait_time = wait_time
+
+        self.index=0
+
+    def __call__(self,*args):
+        return self.activate(*args)
+
+    @property
+    def __get_task(self):
+        return self.__task
+
+    async def test(self):
+        print("test")
+        return 1
+
+    def activate(self,*args):
+        """
+        调用异步函数，在异步结束前会返回processing=-2147483648
+        :param args: 原函数的参数
+        :return: 原函数的返回值或者processing=-2147483648
+        """
+        #无异步操作，则创建
+        if self.__result is None:
+            print("c async")
+            if self.index >= 0:
+                self.__result = asyncio.run_coroutine_threadsafe(self.__task(*args),self.__loop)
+                self.index+=1
+            else:
+                self.__result = asyncio.run_coroutine_threadsafe(testtt(), self.__loop)
+
+
+        time.sleep(self.wait_time)
+
+        print(self.__result.running())
+        #异步操作已完成
+        if self.__result.done():
+            print("d async")
+            value = self.__result.result()
+            # 重置异步器
+            self.__result = None
+            return value
+        #异步进行中
+        else:
+            print("i async")
+            return -2147483648
+
+    @property
+    def done(self):
+        if self.__result is None:
+            return True
+        return self.__result.done()
+
 default_nes_info=json.loads(open('user_info.json','r').read())['necessary']
 default_adt_info=json.loads(open('user_info.json','r').read())['addition']
 
@@ -97,9 +169,6 @@ class User:
 
         #业务数据库
         self._data = datamining.DataMiningAgent()
-
-        #进程锁
-        self.__thread_block = threading.Event()
 
         #直接录入必要+基本信息
         self.__main_info=info_dic
@@ -119,15 +188,18 @@ class User:
         #初始化是否完成
         self.__init = False
 
+        self.__loop = asyncio.new_event_loop()
         #异步模块
-        self.__get_answer_res=UserAsyncModel(self.__get_answer)
-        self.__inquire_res = UserAsyncModel(self.__inquire)
-        self.__classify_res=UserAsyncModel(self.__classify)
-        self.__get_flow_res=UserAsyncModel(self.__get_flow)
+        self.__get_answer_res=UserAsyncModel(self.__get_answer,self.__loop)
+        self.__inquire_res = UserAsyncModel(self.__inquire,self.__loop)
+        self.__classify_res=UserAsyncModel(self.__classify,self.__loop)
+        self.__get_flow_res=UserAsyncModel(self.__get_flow,self.__loop)
+        self.__activate_res=UserAsyncModel(self.__activate,self.__loop)
 
-        self.__activate_res=UserAsyncModel(self.__activate)
 
 
+        #进程锁
+        self.__process_block = None
 
         #检查必要信息
         for key in default_nes_info:
@@ -149,9 +221,11 @@ class User:
         else:
             self.__once_info_dic[key]=value
 
-
-
     def _check_init(self)->bool:
+        """
+        检测activate初始化的进程，如果未初始化完毕将会报错
+        :return:
+        """
         if self.init_finish:
             return True
         else:
@@ -159,10 +233,14 @@ class User:
 
     @property
     def init_finish(self)->bool:
+        """
+        获取一个bool值，表示是否初始化完毕
+        :return:
+        """
         return self.__init
 
     @property
-    def info(self):
+    def info(self)->dict:
         """
         用户的所有信息
         :return:
@@ -187,13 +265,6 @@ class User:
         """
         return self.__once_info_dic
 
-    @property
-    def waiter(self)->threading.Event:
-        """
-        此用户流程的进程锁
-        :return:
-        """
-        return self.__thread_block
 
     @property
     def label(self):
@@ -238,9 +309,12 @@ class User:
         self._check_init()
         return self.__tables_filler
 
-
     def _fill_in_table(self,table: dict):
-
+        """
+        此方法将会把现在用户已有的所有，表格需要的信息填入表中，将会对传入的参数做出改变
+        :param table: 所填表格，需要填写的值为None
+        :return: 返回一个填完的表格
+        """
         for key in table:
             if table[key] is not None:
                 continue
@@ -258,18 +332,47 @@ class User:
         return table
 
 
+    @property
+    def _waiter(self)->asyncio.Event:
+        """
+        此用户流程的进程锁
+        :return:
+        """
+        return self.__process_block
+    async def __set_waiter(self):
+        self._waiter.set()
+    def set_waiter(self):
+        """
+        使进程锁解除阻塞状态，程序继续运行
+        :return:
+        """
+        asyncio.run_coroutine_threadsafe(self.__set_waiter(),self.__loop)
+
+
     async def __inquire(self):
         """
         对当前表进行询问，inquire的异步封装
         :return:
         """
+        print("inquire")
         self._check_init()
 
         question = inquiry.Inquiring(self.tables_filler.table)
         if question is None:
             return None
-        return question.keys()[0],question.values()[0]         #key,sentence
-    def inquire(self):
+        return list(question.keys())[0],list(question.values())[0]         #key,sentence
+    @property
+    def inquire(self)->UserAsyncModel:
+        """
+        询问模块的异步模块封装
+        :return:
+        """
+        return self.__inquire_res
+    def inquire_func(self):
+        """
+        对当前table_filler指向的表进行询问，本质为异步操作
+        :return:
+        """
         return self.__inquire_res.activate()
 
 
@@ -280,10 +383,18 @@ class User:
         :param key: 问题键
         :return: 提取的关键字
         """
+        print("get_answer")
         return inquiry.Get_Answer(text, key)
-    def get_answer(self,text,key):
+    @property
+    def get_answer(self)->UserAsyncModel:
         """
-        对用户自然语言回答进行关键字提取
+        提取回答模块的异步模块封装
+        :return:
+        """
+        return self.__get_answer_res
+    def get_answer_func(self,text,key):
+        """
+        对用户自然语言回答进行关键字提取，本质为异步操作
         :param text: 用户自然语言
         :param key: 问题键
         :return: 结束时返回用户回答的关键字，过程中详见UserAsyncModel
@@ -297,28 +408,55 @@ class User:
         :param require: 用户需求的自然语言
         :return: 返回用户业务类别对应的label值
         """
+        print("classify")
         return classify.classify(require, classify.type_dic)
-    def classify(self,require):
+    @property
+    def classify(self)->UserAsyncModel:
         """
-        用户业务分类，返回异步模块对象
+        用户业务分类的异步模块封装
+        :return:
+        """
+        return self.__classify_res
+    def classify_func(self,require):
+        """
+        用户业务分类，本质为异步操作
         :param require: 用户需求的自然语言
         :return: 结束时返回用户业务类别对应的label值，过程中详见UserAsyncModel
         """
-        return self.__classify_res.activate(require, classify.type_dic)
+        return self.__classify_res.activate(require)
 
 
     async def __get_flow(self):
-        self._data.get_flow(self.__label, self.info)
-
+        """
+        获取流程的异步封装
+        :return:
+        """
+        return self._data.get_flow(self.__label, self.info)
+    @property
+    def get_flow(self)->UserAsyncModel:
+        """
+        获取流程模块的异步模块封装
+        :return:
+        """
+        return self.__get_flow_res
+    def get_flow_func(self):
+        """
+        获取用户当前分类的流程，本质为异步操作
+        :return:
+        """
+        return self.__get_flow_res.activate(self.__label, self.info)
 
 
     # 一个流程的主程序
     def activate(self,require):
-        return self.__activate_res.activate(require)
+        asyncio.set_event_loop(self.__loop)
+        self.__process_block = asyncio.Event()
+        self.__loop.run_until_complete(self.__activate(require))
+        self.__loop.close()
+
     async def __activate(self, require):
         #分类
         self.__label = await asyncio.create_task(self.__classify(require))
-
         # 提取空表+流程
 
         #提取空表
@@ -335,53 +473,14 @@ class User:
 
         while not self.__tables_filler.is_finish:
             self.__tables_filler.table = self._fill_in_table(self.__tables_filler.table)
-
             #填完表等待服务器录入信息
-            self.waiter.wait()
+            await self._waiter.wait()
+            self._waiter.clear()
 
         return True
 
+    def run_on_new_thread(self,require):
+        threading.Thread(target=self.activate,args=(require,)).start()
 
 
-class UserAsyncModel:
-    processing = -2147483648
 
-
-    def __init__(self, task):
-        """
-        创建一个异步操作模块
-        :param task: 一个函数，必须为async的异步函数
-        """
-        self.result = -2147483648
-
-        self.__task = task
-
-    def __call__(self, *args):
-        return asyncio.run(self.activate(*args))
-
-
-    async def __activate(self,*args):
-        """
-        调用异步函数，在异步结束前会返回processing=-2147483648
-        :param args: 原函数的参数
-        :return: 原函数的返回值或者processing=-2147483648
-        """
-
-        #无异步操作
-        if self.result is -2147483648:
-            self.result = asyncio.create_task(self.__task(*args))
-        #异步操作已完成
-        elif self.result.done():
-            value = await self.result
-            # 重置异步器
-            self.result = -2147483648
-            return value
-        #异步进行中
-        else:
-            return -2147483648
-
-    def activate(self,*args):
-        return asyncio.run(self.__activate(*args))
-
-    async def wait_done(self,*args):
-        return await self.result

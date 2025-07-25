@@ -34,5 +34,8 @@
     "marital_status":null,
     "religion":null,
     "education":null
+  },
+  "other": {
+
   }
 }
