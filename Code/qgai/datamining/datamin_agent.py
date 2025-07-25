@@ -1,11 +1,14 @@
 import json
 import os
 
+
 from datamining.deal_flow_api import deal_flow_a
 from datamining.deal_flow_local import deal_flow_l
+from datamining.deal_flow_api import deal_flow
 from server.console import log
 # from deal_flow_api import deal_flow_a
 # from deal_flow_local import deal_flow_l
+
 
 
 table_mark={
@@ -17,9 +20,9 @@ table_mark={
 }
 
 class DataMiningAgent:
-    def __init__(self, tables_path='tables.json',
-                 idx_path='name_to_idx.json',
-                 flow_path='flows.json', ):
+    def __init__(self, tables_path='datamining/tables.json',
+                 idx_path='datamining/name_to_idx.json',
+                 flow_path='datamining/flows.json', ):
         assert os.path.exists(tables_path), f"{tables_path} does not exist"
         assert os.path.exists(idx_path), f"{idx_path} does not exist"
         assert os.path.exists(flow_path), f"{flow_path} does not exist"

@@ -1,3 +1,4 @@
+import asyncio
 import http
 import json
 import threading
@@ -6,8 +7,12 @@ import requests
 import http.server as httpserver
 import datetime
 
+import inspect
+
 
 from user import User,TableFiller,UserAsyncModel
+
+__all__=['log']
 
 host="192.168.1.229"
 port=10925
@@ -21,6 +26,7 @@ flow_dic = {
 
 hash_obj = hashlib.sha256()
 
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         return
@@ -33,10 +39,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         # 请求内容
         request = json.loads(self.rfile.read(content_length).decode("utf8"))
-
         self.wfile.write(json.dumps(self.respond(request)).encode("utf8"))
         self.wfile.flush()
 
+
+    def processing_response(self,user_id):
+        log("\"%s\" is request but processing"%(user_id))
+        response = {
+            "user_id": user_id,
+            "type": "processing",
+            "hash": "a1dadafgdas3asd4s2sfad",
+        }
+
+        return response
 
     def respond(self,request)->dict:
 
@@ -57,7 +72,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             user = User(request["info"])
             flow_dic[user_id] = user
-            threading.Thread(target=user.activate, args=(request["input"]["text"],)).start()
+
+            user = flow_dic[user_id]
+            user.run_on_new_thread(request["input"]["text"])
 
 
         # 获取用户
@@ -71,15 +88,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return response
         #用户正在初始化（处理信息）
         if not user.init_finish:
-            response["type"] = "processing"
-            return response
+            return self.processing_response(user_id)
 
 
 
 
         # 初始化握手响应
         if req_type == "handshake":
-            log("build a new flow,user id:%s" % user_id)
+            log("handshake----user_id:%s" % user_id)
 
             response["type"] = "handshake"
             response["classify"] = user.bus_type
@@ -87,14 +103,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         #询问
         elif req_type == "question":
-            log("user")
+            log("question----user_id:%s" % user_id)
 
             # 获取问题
             question = user.inquire()
             # 异步是否完成
-            if question is int and question ==UserAsyncModel.processing:
-                response["type"] = "processing"
-                return response
+            if not user.inquire.done:
+                return self.processing_response(user_id)
+
 
 
             # 判断这张表的信息
@@ -114,23 +130,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     "key": key,
                     "text": sentence
                 }
+
+
+
+
+
         #解析回答
         elif req_type == "answer":
+            log("answer----user_id:%s" % user_id)
             #解析请求体
             key, text, value = "", "", ""
             if request["input"]["type"] == "text":
                 key = request["input"]["key"]
                 text = request["input"]["text"]
             elif request["input"]["type"] == "audio":
+                1 == 1
                 #key = request["input"]["key"]
                 #text = voice.voice2text(request["input"]["media"])
+
 
             #ai分析用户语言，提取关键字
             value = user.get_answer(text,key)
             #异步是否完成
-            if value is UserAsyncModel.processing:
-                response["type"] = "processing"
-                return response
+            if not user.get_answer.done:
+                return self.processing_response(user_id)
+            print(value)
 
             response["type"] = "answer"
             response["output"] = {
@@ -139,16 +163,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 "text": text,
                 "value": value
             }
-            user[key] = value
+
             #信息已更新，录入
-            user.waiter.set()
+            user[key] = value
+            user.fill_in_table()
 
 
         #数据库储存请求
         elif req_type == "storage":
             response["type"] = "storage"
             response["output"] = user.main_info
+
+
         elif req_type == "summary":
+            flow = user.get_flow(user.info)
+
             response["type"] = "summary"
             response["output"] = {
                 "tables":user.tables_filler.tables,
@@ -158,14 +187,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return response
 
 def log(message:str,model:str="Undefined"):
-    model = model if not model is None else __name__
+    model = model if not model == "Undefined" else inspect.getmodule(inspect.currentframe()).__name__
 
     if model == "__main__":
         model = "main"
     elif model == "server.console":
         model = "Server"
+    elif model.split(".")[0] == "datamining":
+        model = "Datamining"
+    elif model.split(".")[0] == "inquiry":
+        model = "Inquiry"
+    elif model.split(".")[0] == "classify":
+        model = "Classify"
 
-    print("<%s>:[%s]%s"%(model,datetime.datetime.now().strftime('%H:%M:%S'),message))
+    print("[%s]<%s>:%s"%(datetime.datetime.now().strftime('%H:%M:%S'),model,message))
 
 
 def run():

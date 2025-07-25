@@ -1,139 +1,46 @@
 # ================================
-# @File         : Train.py
+# @File         : Train_v1.py
 # @Time         : 2025/07/22
 # @Author       : Yingrui Chen
-# @description  : 对输入的图片进行预处理以及模型训练
+# @description  : 对输入的图片进行预处理以及模型训练（贝叶斯分类版本）
 #                 主函数cv2_train(imgs_bin, user_id, min_acc=0.6)
 #                 传入二进制图片数组、用户ID以及准确率阀值
 #                 如果模型训练成功则返回True
 # ================================
 
-import io
-import logging
-import os
 import time
-from io import BytesIO
 from multiprocessing import Pool
 from os import cpu_count
 
 import cv2
+import random
 import joblib
 import numpy as np
-from PIL import Image
-from sklearn.exceptions import NotFittedError
 from sklearn.preprocessing import LabelEncoder
-from sklearn.svm import SVC
+from sklearn.naive_bayes import MultinomialNB  # 导入贝叶斯分类器
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+from Predict import single_img_bin_predict
+from model_loader import get_components
+from utils.face_utils import (
+    bin_to_image, preprocess_face,
+    extract_features
 )
-logger = logging.getLogger(__name__)
 
-# 确保训练结果目录存在
-trainer_dir = './face_trainer_svm'
-os.makedirs(trainer_dir, exist_ok=True)
+components = get_components()
+logger = components['logger']
+paths = components['paths']
+models = components['models']
 
-# 模型和标签编码器路径
-model_path = os.path.join(trainer_dir, 'svm_model.pkl')
-le_path = os.path.join(trainer_dir, 'label_encoder.pkl')
+model_path = paths['model_path']
+le_path = paths['le_path']
+history_features_path = paths['history_features_path']
+history_labels_path = paths['history_labels_path']
 
-# 人脸数据路径 - 确保这是一个目录
-face_data_path = './facedata'
-if not os.path.exists(face_data_path):
-    logger.error(f"人脸数据路径不存在: {face_data_path}")
-    exit()
-if not os.path.isdir(face_data_path):
-    logger.error(f"人脸数据路径不是一个目录: {face_data_path}")
-    exit()
-
-# 初始化检测器和特征提取模型
-try:
-    # 加载预训练的人脸特征提取模型（OpenFace）
-    nn_model_path = "nn4.small2.v1.t7"
-    if not os.path.exists(nn_model_path):
-        logger.error(f"特征提取模型文件不存在: {nn_model_path}")
-        logger.info("请从 https://cmusatyalab.github.io/openface/models-and-accuracies/ 下载模型")
-        exit()
-    embedder = cv2.dnn.readNetFromTorch(nn_model_path)
-
-    # 加载多个检测器以提高检测鲁棒性
-    detector_paths = [
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml",
-        cv2.data.haarcascades + "haarcascade_frontalface_alt.xml",
-        cv2.data.haarcascades + "haarcascade_frontalface_alt2.xml"
-    ]
-
-    detectors = []
-    for detector_path in detector_paths:
-        if not os.path.exists(detector_path):
-            logger.warning(f"检测器文件不存在: {detector_path}")
-            continue
-
-        detector = cv2.CascadeClassifier(detector_path)
-        if not detector.empty():
-            detectors.append(detector)
-        else:
-            logger.warning(f"无法加载检测器: {detector_path}")
-
-    if not detectors:
-        logger.error("无法加载任何人脸检测器")
-        exit()
-except Exception as e:
-    logger.error(f"初始化模型/检测器失败: {e}")
-    exit()
-
-
-def bin_to_image(bin_data):
-    """
-    将二进制图像数据转换为PIL图像对象
-
-    :param bin_data: 图像的二进制数据
-    :return: 转换后的PIL图像对象，如果转换失败则返回None
-    """
-    try:
-        image_stream = BytesIO(bin_data)
-        img = Image.open(image_stream)
-
-        return img.copy()
-    except Exception as e:
-        logging.error(f"图像转换失败: {str(e)}")
-
-        return None
-
-
-def preprocess_face(face_img):
-    """
-    预处理人脸图像以适配特征提取模型
-
-    :param face_img: 脸部图数据
-    :return: 能够适用于特征提取的图像数据
-    """
-    # 直方图均衡化增强对比度
-    face_img = cv2.equalizeHist(face_img)
-    # 调整为特征提取模型需要的大小（96x96）
-    face_img = cv2.resize(face_img, (96, 96))
-    # 转为3通道（模型要求输入为3通道，即使是灰度图也需要复制通道）
-    face_img = cv2.cvtColor(face_img, cv2.COLOR_GRAY2BGR)
-
-    return face_img
-
-
-def extract_features(face_img):
-    """
-    使用预训练模型提取人脸特征向量
-
-    :param face_img:
-    :return: 返回128维特征向量
-    """
-    # 构建输入 blob
-    face_blob = cv2.dnn.blobFromImage(
-        face_img, 1.0 / 255, (96, 96), (0, 0, 0), swapRB=True, crop=False
-    )
-    embedder.setInput(face_blob)
-
-    return embedder.forward()
+# 使用模型组件
+embedder = models['embedder']
+detectors = models['detectors']
+classifier = models['classifier']
+label_encoder = models['label_encoder']
 
 
 def process_single_image(face_img_bin):
@@ -167,12 +74,16 @@ def process_single_image(face_img_bin):
             return None
 
         (x, y, w, h) = max(faces, key=lambda f: f[2] * f[3])
-        face_img = img_numpy[y:y+h, x:x+w]
+        face_img = img_numpy[y:y + h, x:x + w]
 
         face_img = preprocess_face(face_img)
-        features = extract_features(face_img)
+        features = extract_features(face_img, embedder)
 
-        return features.flatten()           # 展平特征向量
+        # 贝叶斯分类器要求输入非负，对特征进行归一化处理
+        features = (features - np.min(features)) / (np.max(features) - np.min(features) + 1e-8)
+        features = np.clip(features, 0, None)  # 确保没有负值
+
+        return features.flatten()  # 展平特征向量
 
     except Exception as e:
         logger.error(f"处理图片时出错: {e}")
@@ -201,38 +112,6 @@ def get_feature_and_labels(imgs_bin, user_id):
 
     features, labels = zip(*valid_results)
     return list(features), list(labels)
-
-
-def load_existing_data():
-    """
-    加载已有的模型和标签编码器
-
-    :return:
-    """
-    try:
-        if os.path.exists(model_path) and os.path.exists(le_path):
-            logger.info("发现已存在的模型，将在其基础上进行增量训练")
-            clf = joblib.load(model_path)
-            le = joblib.load(le_path)
-
-            # 验证模型是否已训练
-            try:
-                # 尝试访问classes_属性来检查模型是否已训练
-                if hasattr(clf, 'classes_'):
-                    logger.info("模型成功返回")
-                    return clf, le
-                else:
-                    logger.warning("已存在的模型未经过训练，将创建新模型")
-                    return None, None
-            except NotFittedError:
-                logger.warning("已存在的模型未经过训练，将创建新模型")
-                return None, None
-        else:
-            logger.info("未发现已存在的模型，将创建新模型")
-            return None, None
-    except Exception as e:
-        logger.error(f"加载已有模型时出错: {e}，将创建新模型")
-        return None, None
 
 
 def merge_labels(le, new_labels):
@@ -270,7 +149,7 @@ def cv2_train(imgs_bin, user_id, min_acc=0.6):
     :return: 训练评估成果，True成功，False失败
     """
     start_time = time.time()
-    logger.info('开始提取特征并训练SVM模型，请耐心等待....')
+    logger.info('开始提取特征并训练贝叶斯模型，请耐心等待....')
 
     new_features, new_labels = get_feature_and_labels(imgs_bin, user_id)
 
@@ -278,131 +157,96 @@ def cv2_train(imgs_bin, user_id, min_acc=0.6):
         logger.error("没有有效的训练数据，无法进行训练")
         return False
 
-    # 检查是否是首次训练且只有一个类别
-    clf, le = load_existing_data()
-    # 检查是否是首次训练且只有一个类别
-    if clf is None and le is None and len(set(new_labels)) == 1:
-        logger.info("检测到单类别数据，添加默认'未知'类别以满足SVM训练要求")
-        # 可以从现有图片中生成一些变体作为"未知"类别的样本
-        # 这里简单复制并轻微修改部分样本作为未知类别
-        unknown_features = [f * 1.1 for f in new_features[:2]]  # 简单修改特征
-        new_features.extend(unknown_features)
-        new_labels.extend(['unknown'] * len(unknown_features))
+    # 加载组件
+    clf = classifier
+    le = label_encoder
+    history_features = np.load(history_features_path)
+    history_labels = np.load(history_labels_path)
+
+    # 处理首次训练单类别问题
+    if clf is None and le is None:
+        if len(set(new_labels)) == 1:
+            logger.info("检测到单类别数据，添加默认'unknown'类别以满足贝叶斯训练要求")
+            # 生成少量变体作为未知类别样本
+            unknown_features = [f * 1.1 for f in new_features[:2]]
+            new_features.extend(unknown_features)
+            new_labels.extend(['unknown'] * len(unknown_features))
+
+        # 首次训练初始化标签编码器
+        le = LabelEncoder()
+        encoded_labels = le.fit_transform(new_labels)
+        all_features = np.array(new_features)
+        all_labels = encoded_labels
+    else:
+        # 增量训练：合并新旧标签
+        merged_le = merge_labels(le, new_labels)
+        new_encoded = merged_le.transform(new_labels)
+
+        # 合并历史特征和新特征
+        if history_features is not None and history_labels is not None:
+            # 将历史标签转换为新的编码格式
+            history_encoded = merged_le.transform(history_labels)
+            all_features = np.vstack([history_features, new_features])
+            all_labels = np.hstack([history_encoded, new_encoded])
+            logger.info(f"合并历史数据({len(history_features)})和新数据({len(new_features)})")
+        else:
+            all_features = np.array(new_features)
+            all_labels = new_encoded
+
+        le = merged_le
 
     try:
-        # 如果没有已存在的模型，则创建新的
-        if clf is None or le is None:
-            le = LabelEncoder()
-            encoded_labels = le.fit_transform(new_labels)
-            clf = SVC(kernel='linear', probability=True)
-            clf.fit(new_features, encoded_labels)
-            total_samples = len(new_features)
-            unique_ids = len(np.unique(new_labels))
+        # 训练贝叶斯模型（MultinomialNB不支持partial_fit，使用全量数据重新训练实现增量效果）
+        clf = MultinomialNB()  # 初始化贝叶斯分类器
+        clf.fit(all_features, all_labels)
+        logger.info("贝叶斯模型训练完成！")
+
+        logger.info("开始计算准确率... ... ")
+        imgs_bin_sample = random.sample(imgs_bin, min(10, len(imgs_bin)))
+        sample_results = []
+        for i in range(len(imgs_bin_sample)):
+            res, _ = single_img_bin_predict(imgs_bin_sample[i])
+            sample_results.append(res)
+
+        true_samples = sample_results.count(user_id)
+        sample_accuracy = true_samples / len(imgs_bin_sample)
+
+        if sample_accuracy >= min_acc:
+            # 保存模型、标签编码器和历史特征
+            logger.info(f"样本准确率为{sample_accuracy * 100}%，验证通过，保存模型")
+            joblib.dump(clf, model_path)
+            joblib.dump(le, le_path)
+            np.save(history_features_path, all_features)
+            np.save(history_labels_path, le.inverse_transform(all_labels))  # 保存原始标签
         else:
-            # 合并标签，处理新出现的人脸ID
-            merged_le = merge_labels(le, new_labels)
-
-            # 对新标签进行编码
-            new_encoded_labels = merged_le.transform(new_labels)
-
-            # 获取旧模型的训练数据（如果可能）
-            # 注意：SVM不直接存储训练数据，所以我们需要保留历史数据或重新加载
-            # 这里我们假设只使用新数据进行增量训练
-            # 对于更优的增量训练，应该保留历史特征和标签
-            logger.info("模型开始训练...")
-            clf.fit(new_features, new_encoded_labels)
-            logger.info("模型训练完成！")
-            # 更新标签编码器
-            le = merged_le
-
-            # 计算总样本数和唯一ID数
-            total_samples = len(new_features) + len(le.classes_)  # 估计值
-            unique_ids = len(le.classes_)
-
-        # 保存更新后的模型和标签编码器
-        joblib.dump(clf, model_path)
-        joblib.dump(le, le_path)
+            return False
 
         # 计算训练信息
         elapsed_time = time.time() - start_time
+        unique_ids = len(le.classes_)
 
         logger.info(
             f"训练完成！模型共包含 {unique_ids} 个人脸，"
-            f"本次新增 {len(new_features)} 个样本，"
+            f"总样本数: {len(all_features)}，本次新增: {len(new_features)}，"
             f"耗时 {elapsed_time:.2f} 秒。"
-            f"模型已保存到 {model_path}，标签编码器已保存到 {le_path}"
         )
         return True
+
     except Exception as e:
         logger.error(f"训练或保存模型时出错: {e}")
         return False
 
 
 if __name__ == "__main__":
-    img_1_1_path = Image.open("./facedata/12_1075.jpg")
-    img_1_2_path = Image.open("./facedata/12_1076.jpg")
-    img_1_3_path = Image.open("./facedata/12_1079.jpg")
+    # test_img = Image.open("./facedata/test1.jpg")
+    # test_img_bin = img_to_bin(test_img)
+    # imgs_bin = [test_img_bin]
+    # cv2_train(imgs_bin, user_id=2)
+    import pickle
 
-    def img_to_bin(image):
-        img_bin = io.BytesIO()
-        image.save(img_bin, format='JPEG')
-        image_bytes = img_bin.getvalue()
+    with open("./facedata/face_6_bin_data.pkl", "rb") as f:
+        data = pickle.load(f)
+        face_id = data['face_id']
+        images = data['images']
 
-        return image_bytes
-
-    img_1_1_bin = img_to_bin(img_1_1_path)
-    img_1_2_bin = img_to_bin(img_1_2_path)
-    img_1_3_bin = img_to_bin(img_1_3_path)
-
-    imgs_bin = [img_1_1_bin, img_1_2_bin, img_1_3_bin]
-
-    cv2_train(imgs_bin, user_id=3)
-
-    # num_processes = min(cpu_count(), len(imgs_bin))
-    # with Pool(num_processes) as pool:
-    #     results = pool.map(process_single_image, imgs_bin)
-    # valid_results = [(results[0], 1), (results[1], 1), (results[2], 1), (results[3], 2), (results[4], 2), (results[5], 2)]
-    # features, labels = zip(*valid_results)
-    # features = list(features)
-    # labels = list(labels)
-    #
-    # le = LabelEncoder()
-    # encoded_labels = le.fit_transform(labels)
-    #
-    # # 训练SVM分类器
-    # clf = SVC(kernel='linear', probability=True)
-    # clf.fit(features, encoded_labels)
-    #
-    # # 模型和标签编码器路径
-    # model_path = os.path.join(trainer_dir, 'svm_model.pkl')
-    # le_path = os.path.join(trainer_dir, 'label_encoder.pkl')
-    #
-    # joblib.dump(clf, model_path)
-    # joblib.dump(le, le_path)
-    #
-    # logger.info(
-    #     f"使用了 {len(features)} 个样本，"
-    #     f"模型已保存到 {model_path}，标签编码器已保存到 {le_path}"
-    # )
-
-    # def get_jpg_files_relative_path(root_dir):
-    #     jpg_files = []
-    #
-    #     # 遍历目录及其子目录
-    #     for dirpath, dirnames, filenames in os.walk(root_dir):
-    #         for filename in filenames:
-    #             # 检查文件扩展名是否为jpg（不区分大小写）
-    #             if filename.lower().endswith('.jpg'):
-    #                 # 获取文件的绝对路径
-    #                 abs_path = os.path.join(dirpath, filename)
-    #                 # 转换为相对路径（相对于root_dir）
-    #                 rel_path = os.path.relpath(abs_path, root_dir)
-    #                 jpg_files.append(rel_path)
-    #
-    #     return jpg_files
-    #
-    # test_dir = './facedata'
-    # image_paths = get_jpg_files_relative_path(test_dir)
-    # full_image_paths = [os.path.join(test_dir, path) for path in image_paths]
-    # imgs_bin = [img_to_bin(Image.open(path)) for path in full_image_paths]
-    # cv2_train(imgs_bin, user_id=8)
+    cv2_train(images, face_id)

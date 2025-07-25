@@ -1,0 +1,41 @@
+.header {
+  background-color: #e9ecf0;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.logoContainer {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.logo {
+  width: 52px;
+  transition: opacity 0.3s ease;
+  height: 52px;
+}
+
+.logo:hover {
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.title {
+  display: flex;
+  align-self: center;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.title:hover {
+  color: #1890ff;
+  transition: color 0.3s ease;
+}
+
+.userInfo {
+  cursor: pointer;
+}
