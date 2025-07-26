@@ -8,6 +8,7 @@
 #                 如果模型训练成功则返回True
 # ================================
 
+import os
 import time
 from multiprocessing import Pool
 from os import cpu_count
@@ -51,10 +52,16 @@ def process_single_image(face_img_bin):
     :return: 模型处理后的展平向量
     """
     try:
-        face_img = bin_to_image(face_img_bin)
-        # 图片转为灰度图
-        face_img = face_img.convert("L")
-        img_numpy = np.array(face_img, dtype='uint8')
+        # face_img = bin_to_image(face_img_bin)
+        # # 图片转为灰度图
+        # face_img = face_img.convert("L")
+        # img_numpy = np.array(face_img, dtype='uint8')
+
+        # 直接用cv2处理二进制数据，避免PIL转换
+        img_numpy = cv2.imdecode(np.frombuffer(face_img_bin, np.uint8), cv2.IMREAD_GRAYSCALE)
+        if img_numpy is None:
+            logger.warning("图片解码失败")
+            return None
 
         faces = None
         for detector in detectors:
@@ -82,8 +89,9 @@ def process_single_image(face_img_bin):
         # 贝叶斯分类器要求输入非负，对特征进行归一化处理
         features = (features - np.min(features)) / (np.max(features) - np.min(features) + 1e-8)
         features = np.clip(features, 0, None)  # 确保没有负值
+        features = features.flatten()
 
-        return features.flatten()  # 展平特征向量
+        return features
 
     except Exception as e:
         logger.error(f"处理图片时出错: {e}")
@@ -117,13 +125,13 @@ def get_feature_and_labels(imgs_bin, user_id):
 def merge_labels(le, new_labels):
     """
     合并已有的标签和新标签，确保所有标签都被正确编码
-
-    :param le:
-    :param new_labels:
-    :return:
     """
-    # 获取已有的所有标签
-    existing_labels = list(le.classes_)
+    # 检查编码器是否已拟合（通过判断classes_是否存在）
+    if hasattr(le, 'classes_'):
+        existing_labels = list(le.classes_)
+    else:
+        # 编码器未拟合，初始化为空列表
+        existing_labels = []
 
     # 找出新标签中不存在于已有标签中的部分
     new_unique_labels = list(set(new_labels) - set(existing_labels))
@@ -160,8 +168,17 @@ def cv2_train(imgs_bin, user_id, min_acc=0.6):
     # 加载组件
     clf = classifier
     le = label_encoder
-    history_features = np.load(history_features_path)
-    history_labels = np.load(history_labels_path)
+
+    # 检查历史特征和标签文件是否存在
+    if os.path.exists(history_features_path) and os.path.exists(history_labels_path):
+        train_first = False
+        history_features = np.load(history_features_path)
+        history_labels = np.load(history_labels_path)
+    else:
+        # 首次训练时初始化空数组
+        train_first = True
+        history_features = None
+        history_labels = None
 
     # 处理首次训练单类别问题
     if clf is None and le is None:
@@ -197,28 +214,33 @@ def cv2_train(imgs_bin, user_id, min_acc=0.6):
 
     try:
         # 训练贝叶斯模型（MultinomialNB不支持partial_fit，使用全量数据重新训练实现增量效果）
-        clf = MultinomialNB()  # 初始化贝叶斯分类器
+        # clf = MultinomialNB()  # 初始化贝叶斯分类器
         clf.fit(all_features, all_labels)
-        logger.info("贝叶斯模型训练完成！")
+        logger.info("贝叶斯模型训练完成！开始计算样本准确率，进行模型保存校验... ...")
 
-        logger.info("开始计算准确率... ... ")
         imgs_bin_sample = random.sample(imgs_bin, min(10, len(imgs_bin)))
         sample_results = []
         for i in range(len(imgs_bin_sample)):
-            res, _ = single_img_bin_predict(imgs_bin_sample[i])
-            sample_results.append(res)
+            res, _ = single_img_bin_predict(imgs_bin_sample[i], clf=clf, le=le)
+            if res is not None:
+                sample_results.append(res)
 
         true_samples = sample_results.count(user_id)
         sample_accuracy = true_samples / len(imgs_bin_sample)
 
-        if sample_accuracy >= min_acc:
+        if sample_accuracy >= min_acc or train_first:
             # 保存模型、标签编码器和历史特征
-            logger.info(f"样本准确率为{sample_accuracy * 100}%，验证通过，保存模型")
+            if train_first:
+                logger.info("首次训练，成功录入人脸模型！")
+            else:
+                logger.info(f"样本准确率为{sample_accuracy * 100}%，验证通过，保存模型")
+
             joblib.dump(clf, model_path)
             joblib.dump(le, le_path)
             np.save(history_features_path, all_features)
             np.save(history_labels_path, le.inverse_transform(all_labels))  # 保存原始标签
         else:
+            logger.error(f"样本准确率为{sample_accuracy * 100}%，验证失败，重新录入人脸！")
             return False
 
         # 计算训练信息
@@ -244,9 +266,9 @@ if __name__ == "__main__":
     # cv2_train(imgs_bin, user_id=2)
     import pickle
 
-    with open("./facedata/face_6_bin_data.pkl", "rb") as f:
+    with open("./facedata/face_yingrui_bin_data.pkl", "rb") as f:
         data = pickle.load(f)
         face_id = data['face_id']
         images = data['images']
 
-    cv2_train(images, face_id)
+    print(cv2_train(images, face_id, min_acc=0.5))
