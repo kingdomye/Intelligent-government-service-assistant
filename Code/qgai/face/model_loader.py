@@ -40,7 +40,7 @@ class FaceModelLoader:
 
         # 初始化工作流
         self._setup_directories()
-        self._validate_data_path()
+        # self._validate_data_path()
         self._load_embedder()
         self._load_detectors()
 
@@ -52,7 +52,6 @@ class FaceModelLoader:
         """确保训练结果目录存在"""
         try:
             os.makedirs(self.trainer_dir, exist_ok=True)
-            logger.info(f"训练目录已准备: {self.trainer_dir}")
         except Exception as e:
             logger.error(f"创建训练目录失败: {e}")
             raise
@@ -67,8 +66,6 @@ class FaceModelLoader:
             logger.error(f"人脸数据路径不是一个目录: {self.face_data_path}")
             raise NotADirectoryError(f"人脸数据路径不是一个目录: {self.face_data_path}")
 
-        logger.info(f"人脸数据路径验证通过: {self.face_data_path}")
-
     def _load_embedder(self):
         """加载预训练的人脸特征提取模型（OpenFace）"""
         try:
@@ -78,7 +75,6 @@ class FaceModelLoader:
                 raise FileNotFoundError(f"特征提取模型文件不存在: {self.nn_model_path}")
 
             self.embedder = cv2.dnn.readNetFromTorch(self.nn_model_path)
-            logger.info("特征提取模型加载成功")
         except Exception as e:
             logger.error(f"加载特征提取模型失败: {e}")
             raise
@@ -99,7 +95,6 @@ class FaceModelLoader:
             detector = cv2.CascadeClassifier(detector_path)
             if not detector.empty():
                 self.detectors.append(detector)
-                logger.info(f"成功加载检测器: {os.path.basename(detector_path)}")
             else:
                 logger.warning(f"无法加载检测器: {detector_path}")
 
@@ -114,7 +109,6 @@ class FaceModelLoader:
                 # 这里假设使用joblib保存和加载模型
                 import joblib
                 clf = joblib.load(self.model_path)
-                logger.info(f"成功加载贝叶斯模型: {self.model_path}")
                 return clf
             else:
                 logger.info("未发现已有模型，初始化新的贝叶斯模型")
@@ -130,7 +124,6 @@ class FaceModelLoader:
                 # 这里假设使用joblib保存和加载编码器
                 import joblib
                 le = joblib.load(self.le_path)
-                logger.info(f"成功加载标签编码器: {self.le_path}")
                 return le
             else:
                 logger.info("未发现已有标签编码器，初始化新的编码器")
@@ -145,7 +138,6 @@ class FaceModelLoader:
             'logger': logger,
             'paths': {
                 'trainer_dir': self.trainer_dir,
-                'face_data_path': self.face_data_path,
                 'model_path': self.model_path,
                 'le_path': self.le_path,
                 'history_features_path': self.history_features_path,
@@ -160,10 +152,9 @@ class FaceModelLoader:
         }
 
 
-loader = FaceModelLoader()
+def get_components(loader=None):
+    loader = FaceModelLoader()
 
-
-def get_components():
     return loader.get_components()
 
 
