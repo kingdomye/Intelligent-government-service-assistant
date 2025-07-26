@@ -1,3 +1,6 @@
 /Code/qgai/server/__pycache__
 *.pyc
 /Code/qgai/datamining/__pycache__
+*.pkl
+*.npy
+*.npy

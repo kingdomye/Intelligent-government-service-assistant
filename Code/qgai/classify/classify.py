@@ -13,7 +13,6 @@ headers={
 
 # 定义一个函数classify，用于对文本进行分类
 def classify(text,label_dict):
-    print("classify")
     if not text.strip():
         raise ValueError("输入文本不能为空")
     if not label_dict:
@@ -26,11 +25,9 @@ def classify(text,label_dict):
         "parameters":{"candidate_labels":candidate_labels}
     }
     # 发送post请求，将payload作为json数据发送到API_URL
-    print("classify 2")
     response=requests.post(API_URL,headers=headers,json=payload)
     # 获取响应结果
     result=response.json()
-    print("classify 3")
     top_label=result["labels"][0]
     top_score=result["scores"][0]
     # 获取分类结果中的第一个标签

@@ -20,9 +20,9 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder
 from sklearn.naive_bayes import MultinomialNB  # 导入贝叶斯分类器
 
-from Predict import single_img_bin_predict
-from model_loader import get_components
-from utils.face_utils import (
+from face.Predict import single_img_bin_predict
+from face.model_loader import get_components
+from face.utils.face_utils import (
     bin_to_image, preprocess_face,
     extract_features
 )

@@ -8,9 +8,9 @@
 import cv2
 import joblib
 import numpy as np
-from model_loader import get_components
+from face.model_loader import get_components
 
-from utils.face_utils import (
+from face.utils.face_utils import (
     bin_to_image_array, preprocess_face, extract_features,
     detect_largest_face, normalize_features, img_to_bin
 )
@@ -123,10 +123,8 @@ def cv2_predict(imgs_bin, min_acc=0.6):
     best_label = max(count, key=count.get)
     best_confidence = label_confidences[best_label]
     best_confidence_avg = np.mean(best_confidence)
-
+    
     logger.info(f"预测用户的id为 {best_label} ，置信度为 {best_confidence_avg:.4f}%")
-
-    # print(label_confidences)
 
     if best_confidence_avg < min_acc:
         return None
