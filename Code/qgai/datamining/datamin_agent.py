@@ -4,7 +4,6 @@ import os
 
 from datamining.deal_flow_api import deal_flow_a
 from datamining.deal_flow_local import deal_flow_l
-from datamining.deal_flow_api import deal_flow
 from server.console import log
 # from deal_flow_api import deal_flow_a
 # from deal_flow_local import deal_flow_l

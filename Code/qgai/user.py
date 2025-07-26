@@ -2,12 +2,14 @@ import threading
 import json
 import asyncio
 import time
+from typing import Optional
 
 import inquiry
 import datamining
 import classify
+import face
 
-__all__=['User','TableFiller','UserAsyncModel']
+__all__=['User','TableFiller','UserAsyncModel','AsyncFaceLooper']
 
 
 class TableFiller:
@@ -80,15 +82,12 @@ class TableFiller:
 
         return table
 
-async def testtt():
-    print("testtt")
 
 class UserAsyncModel:
     """
     在其他线程的异步操作上分支出一个新的异步的操作，并在执行时加入循环
     """
     processing = -2147483648
-
 
     def __init__(self, task,loop,wait_time=0.5):
         """
@@ -111,10 +110,6 @@ class UserAsyncModel:
     def __get_task(self):
         return self.__task
 
-    async def test(self):
-        print("test")
-        return 1
-
     def activate(self,*args):
         """
         调用异步函数，在异步结束前会返回processing=-2147483648
@@ -123,27 +118,21 @@ class UserAsyncModel:
         """
         #无异步操作，则创建
         if self.__result is None:
-            print("c async")
-            if self.index >= 0:
-                self.__result = asyncio.run_coroutine_threadsafe(self.__task(*args),self.__loop)
-                self.index+=1
-            else:
-                self.__result = asyncio.run_coroutine_threadsafe(testtt(), self.__loop)
+            self.__result = asyncio.run_coroutine_threadsafe(self.__task(*args), self.__loop)
+            self.index += 1
+
 
 
         time.sleep(self.wait_time)
 
-        print(self.__result.running())
         #异步操作已完成
         if self.__result.done():
-            print("d async")
             value = self.__result.result()
             # 重置异步器
             self.__result = None
             return value
         #异步进行中
         else:
-            print("i async")
             return -2147483648
 
     @property
@@ -161,7 +150,7 @@ default_main_info.update(default_adt_info)
 
 class User:
 
-    def __init__(self, info_dic: dict):
+    def __init__(self, info_dic: dict,just_face = False):
         """
         初始化一个用户
         :param info_dic: 数据库中保存的所有的信息，包含所有必要信息和已有的基本信息
@@ -195,11 +184,18 @@ class User:
         self.__classify_res=UserAsyncModel(self.__classify,self.__loop)
         self.__get_flow_res=UserAsyncModel(self.__get_flow,self.__loop)
         self.__activate_res=UserAsyncModel(self.__activate,self.__loop)
+        self.__enter_face_res=UserAsyncModel(self.__enter_face,self.__loop)
+        self.__predict_face_res=UserAsyncModel(self.__predict_face,self.__loop)
 
 
 
         #进程锁
         self.__process_block = None
+
+
+        if just_face:
+            return
+
 
         #检查必要信息
         for key in default_nes_info:
@@ -376,7 +372,7 @@ class User:
         return self.__inquire_res.activate()
 
 
-    async def __get_answer(self,text,key):
+    async def __get_answer(self,text:str,key:str)->str:
         """
         对用户自然语言回答进行关键字提取，get_answer的异步封装
         :param text: 用户自然语言
@@ -392,7 +388,7 @@ class User:
         :return:
         """
         return self.__get_answer_res
-    def get_answer_func(self,text,key):
+    def get_answer_func(self,text:str,key:str):
         """
         对用户自然语言回答进行关键字提取，本质为异步操作
         :param text: 用户自然语言
@@ -402,7 +398,7 @@ class User:
         return self.__get_answer_res.activate(text,key)
 
 
-    async def __classify(self,require):
+    async def __classify(self,require)->int:
         """
         用户业务分类的异步封装
         :param require: 用户需求的自然语言
@@ -417,7 +413,7 @@ class User:
         :return:
         """
         return self.__classify_res
-    def classify_func(self,require):
+    def classify_func(self,require)->int:
         """
         用户业务分类，本质为异步操作
         :param require: 用户需求的自然语言
@@ -425,8 +421,7 @@ class User:
         """
         return self.__classify_res.activate(require)
 
-
-    async def __get_flow(self):
+    async def __get_flow(self)->str:
         """
         获取流程的异步封装
         :return:
@@ -439,20 +434,36 @@ class User:
         :return:
         """
         return self.__get_flow_res
-    def get_flow_func(self):
+    def get_flow_func(self)->str:
         """
         获取用户当前分类的流程，本质为异步操作
         :return:
         """
         return self.__get_flow_res.activate(self.__label, self.info)
 
+    async def __enter_face(self,user_id,imgs_bin)->bool:
+        return face.cv2_train(imgs_bin,user_id)
+    @property
+    def enter_face(self)->UserAsyncModel:
+        return self.__enter_face_res
+    def enter_face_func(self,user_id,imgs_bin)->bool:
+        return self.__enter_face_res.activate(user_id,imgs_bin)
 
-    # 一个流程的主程序
+    async def __predict_face(self,imgs_bin)->Optional[str]:
+        return face.cv2_predict(imgs_bin)
+    @property
+    def predict_face(self)->UserAsyncModel:
+        return self.__predict_face_res
+    def predict_face_func(self,imgs_bin)->Optional[str]:
+        return self.__predict_face_res.activate(imgs_bin)
+
+    # 一个流程的主程序，开启异步循环
     def activate(self,require):
         asyncio.set_event_loop(self.__loop)
         self.__process_block = asyncio.Event()
         self.__loop.run_until_complete(self.__activate(require))
         self.__loop.close()
+
 
     async def __activate(self, require):
         #分类
@@ -483,4 +494,37 @@ class User:
         threading.Thread(target=self.activate,args=(require,)).start()
 
 
+class AsyncLooper:
+    def __init__(self,func):
+        self.__loop = None
+        self.__async_models={}
+        self.__task=func
 
+    def __getitem__(self, id)->UserAsyncModel:
+        return self.__async_models[id]
+
+    def __contains__(self,id)->bool:
+        return id in self.__async_models
+
+    def __delitem__(self, id):
+        del self.__async_models[id]
+
+
+    def append(self,id):
+        self.__async_models[id] = UserAsyncModel(self.__task,self.__loop)
+
+    def run_loop(self):
+        self.__loop = asyncio.new_event_loop()
+        self.__loop.run_forever()
+
+    def run_loop_on_new_thread(self):
+        threading.Thread(target=self.run_loop).start()
+
+
+class AsyncFaceLooper(AsyncLooper):
+    def __init__(self):
+        super().__init__(AsyncFaceLooper.async_predict_face)
+
+    @staticmethod
+    async def async_predict_face(imgs_bin)->Optional[str]:
+        return face.cv2_predict(imgs_bin)
