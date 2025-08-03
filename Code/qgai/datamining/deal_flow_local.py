@@ -39,16 +39,12 @@ def deal_flow_l(user_input, raw_text:str, cat_gril = False)->str:
     """
 
     payload = json.dumps({
-        "model": "DeepSeek-r1:7b",  # model参数
+        "model": "DeepSeek-r1:7b",
         "messages": [
             {"role": "system", "content": character},
             {"role": "user", "content": prompt}
         ],
-        # 是否开启流式推理, 默认为False, 表示不开启流式推理
         "stream": False,
-        # 在流式输出时是否展示使用的token数目。只有当stream为True时改参数才会生效。
-        # "stream_options": { "include_usage": True },
-        # 控制采样随机性的浮点数，值较低时模型更具确定性，值较高时模型更具创造性。"0"表示贪婪取样。默认为0.6。
         "temperature": temperature,
     }, ensure_ascii=False)
 
@@ -63,7 +59,6 @@ def deal_flow_l(user_input, raw_text:str, cat_gril = False)->str:
         return output
     else:
         return '-2'
-
 
 #
 # def debug():
@@ -94,4 +89,3 @@ def deal_flow_l(user_input, raw_text:str, cat_gril = False)->str:
 #
 #
 # debug()
-

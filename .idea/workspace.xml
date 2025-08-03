@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="5b93ad4d-cd88-452b-864f-6a735a775ded" name="更改" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;LZX2025&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/kingdomye/Intelligent-government-service-assistant.git&quot;,
+    &quot;accountId&quot;: &quot;ee9ee778-ecfc-4182-91ac-35cb11dcd335&quot;
+  }
+}</component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="CurrentFile" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 6
+}</component>
+  <component name="ProjectId" id="30OHRhM3nzUrqkCzsRHvcFm60uA" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.111.executor": "Run",
+    "Python.2.executor": "Run",
+    "Python.deal_flow_api.executor": "Run",
+    "Python.deal_flow_local.executor": "Run",
+    "Python.deal_flow_plus.executor": "Run",
+    "Python.demo.executor": "Run",
+    "Python.finetuning.executor": "Run",
+    "Python.infotodata1.executor": "Run",
+    "Python.ollama增量训练.executor": "Run",
+    "Python.test.executor": "Run",
+    "Python.test2.executor": "Run",
+    "Python.test_api.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Users/32673/Documents/GitHub/Intelligent-government-service-assistant/Code/qgai/datamining/hf_model_finetuning/train_datas",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\32673\Documents\GitHub\Intelligent-government-service-assistant\Code\qgai\datamining\hf_model_finetuning\train_datas" />
+      <recent name="C:\Users\32673\Documents\GitHub\Intelligent-government-service-assistant\Code\qgai\datamining\hf_model_finetuning" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\32673\Documents\GitHub\Intelligent-government-service-assistant\Code\qgai\datamining\hf_model_finetuning" />
+      <recent name="C:\Users\32673\Documents\GitHub\Intelligent-government-service-assistant\Code\qgai\datamining" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-1632447f56bf-JavaScript-PY-243.25659.43" />
+        <option value="bundled-python-sdk-181015f7ab06-4df51de95216-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.25659.43" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="应用程序级" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="5b93ad4d-cd88-452b-864f-6a735a775ded" name="更改" comment="" />
+      <created>1753491692806</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1753491692806</updated>
+      <workItem from="1753491694056" duration="1402000" />
+      <workItem from="1753493863367" duration="27823000" />
+      <workItem from="1753664245603" duration="7290000" />
+      <workItem from="1753786369910" duration="9259000" />
+      <workItem from="1753859713222" duration="264000" />
+      <workItem from="1753860001173" duration="4066000" />
+      <workItem from="1753880911411" duration="5087000" />
+      <workItem from="1753923384349" duration="17524000" />
+      <workItem from="1754009625987" duration="6552000" />
+      <workItem from="1754096410959" duration="7898000" />
+      <workItem from="1754120234296" duration="582000" />
+      <workItem from="1754120827266" duration="10311000" />
+      <workItem from="1754193516243" duration="3519000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/Code/qgai/datamining/hf_model_finetuning/user_datas/infotodata1.py</url>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$deal_flow_plus.coverage" NAME="deal_flow_plus 覆盖结果" MODIFIED="1754193977392" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$test.coverage" NAME="test 覆盖结果" MODIFIED="1754195993053" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$test2.coverage" NAME="test2 覆盖结果" MODIFIED="1753926991613" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining/hf_model_finetuning" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$finetuning.coverage" NAME="finetuning 覆盖结果" MODIFIED="1754143042822" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining/hf_model_finetuning" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$ollama.coverage" NAME="ollama增量训练 覆盖结果" MODIFIED="1753799303561" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining/新建文件夹 (5)" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$demo.coverage" NAME="demo 覆盖结果" MODIFIED="1753537429591" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$infotodata1.coverage" NAME="infotodata1 覆盖结果" MODIFIED="1754141424558" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining/hf_model_finetuning/user_datas" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$111.coverage" NAME="111 覆盖结果" MODIFIED="1753927062516" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining/hf_model_finetuning" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$test_api.coverage" NAME="test_api 覆盖结果" MODIFIED="1753521477427" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$deal_flow_local.coverage" NAME="deal_flow_local 覆盖结果" MODIFIED="1753537043542" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$2.coverage" NAME="2 覆盖结果" MODIFIED="1754142696247" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining/hf_model_finetuning/train_datas" />
+    <SUITE FILE_PATH="coverage/Intelligent_government_service_assistant$deal_flow_api.coverage" NAME="deal_flow_api 覆盖结果" MODIFIED="1753497287819" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/Code/qgai/datamining" />
+  </component>
+</project>

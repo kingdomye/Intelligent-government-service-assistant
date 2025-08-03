@@ -1,11 +1,10 @@
 import json
 import os
+import asyncio
+from typing import AsyncGenerator, Optional
 
-from datamining.deal_flow_api1 import deal_flow_a
-from datamining.deal_flow_local import deal_flow_l
+from datamining.deal_flow_plus import generate_streaming_response
 # from server.console import log
-# from deal_flow_api1 import deal_flow_a
-# from deal_flow_local import deal_flow_l
 
 
 table_mark={
@@ -17,19 +16,20 @@ table_mark={
 }
 
 class DataMiningAgent:
-    def __init__(self, tables_path='datamining/tables.json',
-                 idx_path='datamining/name_to_idx.json',
-                 flow_path='datamining/flows.json', ):
+    def __init__(self, tables_path='tables.json',
+                 idx_path='name_to_idx.json',
+                 # flow_path='flows.json',
+                 ):
         assert os.path.exists(tables_path), f"{tables_path} does not exist"
         assert os.path.exists(idx_path), f"{idx_path} does not exist"
-        assert os.path.exists(flow_path), f"{flow_path} does not exist"
+        # assert os.path.exists(flow_path), f"{flow_path} does not exist"
 
         with open(idx_path, 'r', encoding='utf-8') as f:
             self.name_to_idx = json.load(f)
         with open(tables_path, 'r', encoding='utf-8') as f:
             self.tables = json.load(f)
-        with open(flow_path, 'r', encoding='utf-8') as f:
-            self.flows = json.load(f)
+        # with open(flow_path, 'r', encoding='utf-8') as f:
+        #     self.flows = json.load(f)
 
     def label_to_idx(self, label: str)->int:
         """
@@ -66,42 +66,59 @@ class DataMiningAgent:
         except KeyError:
             return ['-1']
 
-    def get_org_flow(self, idx:int)->str:
-        """
-        Get flow by index
-        :param idx: flow index(view in 'name_to_idx.json')
-        :return: flow / error:-1
-        """
-        try:
-            idx = str(idx)
-            return self.flows[idx]
-        except KeyError:
-            return '-1'
+    # def get_org_flow(self, idx:int)->str:
+    #     """
+    #     Get flow by index
+    #     :param idx: flow index(view in 'name_to_idx.json')
+    #     :return: flow / error:-1
+    #     """
+    #     try:
+    #         idx = str(idx)
+    #         return self.flows[idx]
+    #     except KeyError:
+    #         return '-1'
+    #
+    # def get_flow(self, idx:int, user_info:dict, mod='remote', cat_mode=False)->str:
+    #     """
+    #     Get final flow
+    #     :param idx: index(view in 'name_to_idx.json')
+    #     :param user_info: user info
+    #     :param mod: 'local' or 'remote' (default remote)
+    #     :param cat_mode: cat gril mode (default False)
+    #     :return: flow / error:-1 / mod error
+    #     """
+    #     user_info['业务类型'] = self.idx_to_label(idx)
+    #     user_info = self.anonymize_user_data(user_info)
+    #     if mod == 'remote':
+    #         try:
+    #             flow = deal_flow_a(user_info, self.get_org_flow(idx), cat_gril=cat_mode)
+    #             return flow
+    #         except KeyError:
+    #             return '-1'
+    #     elif mod == 'local':
+    #         try:
+    #             flow = deal_flow_l(user_info, self.get_org_flow(idx), cat_gril=cat_mode)
+    #             return flow
+    #         except KeyError:
+    #             return '-1'
+    #     return 'mod error'
 
-    def get_flow(self, idx:int, user_info:dict, mod='remote', cat_mode=False)->str:
+
+    async def get_flow(self, idx: int, user_info:dict)->Optional[AsyncGenerator]:
         """
-        Get final flow
-        :param idx: index(view in 'name_to_idx.json')
+        返回流程
+        :param idx: table index(view in 'name_to_idx.json')
         :param user_info: user info
-        :param mod: 'local' or 'remote' (default remote)
-        :param cat_mode: cat gril mode (default False) (just local)
-        :return: flow / error:-1 / mod error
+        :return:
         """
         user_info['业务类型'] = self.idx_to_label(idx)
         user_info = self.anonymize_user_data(user_info)
-        if mod == 'remote':
-            try:
-                flow = deal_flow_a(user_info, self.get_org_flow(idx), cat_gril=cat_mode)
-                return flow
-            except KeyError:
-                return '-1'
-        elif mod == 'local':
-            try:
-                flow = deal_flow_l(user_info, self.get_org_flow(idx), cat_gril=cat_mode)
-                return flow
-            except KeyError:
-                return '-1'
-        return 'mod error'
+        try:
+            flow = generate_streaming_response(user_info)
+            return flow
+        except ValueError:
+            return None
+
 
     def anonymize_user_data(self, user_info):
         """脱敏用户敏感信息"""

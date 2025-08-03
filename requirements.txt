@@ -1,0 +1,10 @@
+numpy~=2.0.2
+pillow~=11.1.0
+transformers~=4.54.0
+tqdm~=4.67.1
+sympy~=1.13.1
+requests~=2.32.4
+peft~=0.16.0
+faker~=37.3.0
+datasets~=2.2.1
+trl~=0.7.4

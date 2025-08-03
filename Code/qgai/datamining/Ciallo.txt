@@ -27,33 +27,5 @@ ERROR CODE:
 -2  api or net error
 -3  user info error
 
-
-    url = "http://localhost:11434/api/chat"
-    headers = {"Content-Type": "application/json"}
-        prompt = f""""""
-
-    payload = json.dumps({
-        "model": "DeepSeek-r1:7b",  # model参数
-        "messages": [
-            {"role": "system", "content": ""},
-            {"role": "user", "content": prompt}
-        ],
-        # 是否开启流式推理, 默认为False, 表示不开启流式推理
-        "stream": False,
-        # 在流式输出时是否展示使用的token数目。只有当stream为True时改参数才会生效。
-        # "stream_options": { "include_usage": True },
-        # 控制采样随机性的浮点数，值较低时模型更具确定性，值较高时模型更具创造性。"0"表示贪婪取样。默认为0.6。
-        "temperature": 1e-6
-    }, ensure_ascii=False)
-        response = requests.request("POST", url, headers=headers, data=payload.encode("utf-8"))
-    # print(response.text)
-
-    # 处理输出
-    resp = response.json()
-    output = resp['message']['content']
-    output = re.sub(r'<think>.*?</think>', '', output, flags=re.DOTALL)
-    if len(output) > 0:
-        return output
-    else:
-        return '-2'
+获取流程使用示例：datamining/test.py
 
