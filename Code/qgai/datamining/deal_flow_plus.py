@@ -47,7 +47,7 @@ model = AutoModelForCausalLM.from_pretrained(
     offload_state_dict=True
 )
 
-# 5. 加载LoRA权重（与4-bit量化模型兼容）
+# 5. 加载LoRA权重
 model = PeftModel.from_pretrained(
     model,
     lora_path,
@@ -60,19 +60,21 @@ model.eval()  # 切换到推理模式
 # 6. 流式推理函数（使用TextIteratorStreamer实现）
 async def generate_streaming_response(user_input, raw_text=None, max_length=1024):
     prompt = f"""
-    严格按以下规则处理：
-    1. 仅保留与用户特征相关的步骤;
-    2. 保留必要信息和详细流程;
-    3. 根据用户特征，便于用户理解;
-    4. 如果用户数据不符合显现实逻辑，输出“<-3>请输入正确的信息”，并附上原因;
-    5. 根据用户决定使用的语言
-    6. 使用markdown语法，直接输出流程不带标注,如：
+    # 严格按以下规则处理：
+    # 1. 仅保留与用户特征相关的步骤;
+    # 2. 保留必要信息和详细流程;
+    # 3. 根据用户特征，便于用户理解;
+    # 4. 如果用户数据不符合显现实逻辑，输出“<-3>请输入正确的信息”，并附上原因;
+    # 5. 根据用户决定使用的语言
+    # 6. 使用markdown语法，直接输出流程不带标注,如：
+
     ---
     ##步骤
     -解释1
     -解释2
     ---
 
+    原始流程：{raw_text}
     用户特征：{json.dumps(user_input, ensure_ascii=False)}
 
     """

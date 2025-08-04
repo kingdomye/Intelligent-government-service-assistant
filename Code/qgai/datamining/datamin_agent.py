@@ -18,18 +18,18 @@ table_mark={
 class DataMiningAgent:
     def __init__(self, tables_path='tables.json',
                  idx_path='name_to_idx.json',
-                 # flow_path='flows.json',
+                 flow_path='flows.json',
                  ):
         assert os.path.exists(tables_path), f"{tables_path} does not exist"
         assert os.path.exists(idx_path), f"{idx_path} does not exist"
-        # assert os.path.exists(flow_path), f"{flow_path} does not exist"
+        assert os.path.exists(flow_path), f"{flow_path} does not exist"
 
         with open(idx_path, 'r', encoding='utf-8') as f:
             self.name_to_idx = json.load(f)
         with open(tables_path, 'r', encoding='utf-8') as f:
             self.tables = json.load(f)
-        # with open(flow_path, 'r', encoding='utf-8') as f:
-        #     self.flows = json.load(f)
+        with open(flow_path, 'r', encoding='utf-8') as f:
+            self.flows = json.load(f)
 
     def label_to_idx(self, label: str)->int:
         """
@@ -66,18 +66,18 @@ class DataMiningAgent:
         except KeyError:
             return ['-1']
 
-    # def get_org_flow(self, idx:int)->str:
-    #     """
-    #     Get flow by index
-    #     :param idx: flow index(view in 'name_to_idx.json')
-    #     :return: flow / error:-1
-    #     """
-    #     try:
-    #         idx = str(idx)
-    #         return self.flows[idx]
-    #     except KeyError:
-    #         return '-1'
-    #
+    def get_org_flow(self, idx:int)->str:
+        """
+        Get flow by index
+        :param idx: flow index(view in 'name_to_idx.json')
+        :return: flow / error:-1
+        """
+        try:
+            idx = str(idx)
+            return self.flows[idx]
+        except KeyError:
+            return '-1'
+
     # def get_flow(self, idx:int, user_info:dict, mod='remote', cat_mode=False)->str:
     #     """
     #     Get final flow
@@ -114,7 +114,7 @@ class DataMiningAgent:
         user_info['业务类型'] = self.idx_to_label(idx)
         user_info = self.anonymize_user_data(user_info)
         try:
-            flow = generate_streaming_response(user_info)
+            flow = generate_streaming_response(user_info, raw_text=self.get_org_flow(idx))
             return flow
         except ValueError:
             return None
@@ -144,7 +144,7 @@ class DataMiningAgent:
             del anonymized['年龄']
 
         # 移除其他敏感字段
-        sensitive_fields = ['身份证号', '联系电话', '详细地址']
+        sensitive_fields = ['身份证号', '联系电话', '详细地址', "电子邮箱"]
         for field in sensitive_fields:
             if field in anonymized:
                 del anonymized[field]
