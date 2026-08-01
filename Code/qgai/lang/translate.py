@@ -1,24 +1,22 @@
 import json
-import os
+from functools import lru_cache
+from pathlib import Path
 
-__all__=['translate','detranslate']
-
-
-def translate(vocab,lang="zh-cn"):
-    lang_dic = json.loads(open(os.path.join("lang",lang+".lang"),'r',encoding='utf-8').read())
-
-    if vocab not in lang_dic:
-        return None
-    else:
-        return lang_dic[vocab]
+__all__ = ["translate", "detranslate"]
+LANG_DIR = Path(__file__).resolve().parent
 
 
-def detranslate(vocab,lang="zh-cn"):
-    lang_dic = json.loads(open(os.path.join("lang",lang+".json"),'r',encoding='utf-8').read())
+@lru_cache(maxsize=8)
+def _load_language(lang: str) -> dict[str, str]:
+    path = LANG_DIR / f"{lang}.lang"
+    with path.open(encoding="utf-8") as language_file:
+        return json.load(language_file)
 
-    lang_dic = dict(zip(lang_dic.values(), lang_dic.keys()))
 
-    if vocab not in lang_dic:
-        return None
-    else:
-        return lang_dic[vocab]
+def translate(vocab: str, lang: str = "zh-cn") -> str | None:
+    return _load_language(lang).get(vocab)
+
+
+def detranslate(vocab: str, lang: str = "zh-cn") -> str | None:
+    language = _load_language(lang)
+    return {translated: source for source, translated in language.items()}.get(vocab)

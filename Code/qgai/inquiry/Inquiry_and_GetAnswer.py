@@ -1,4 +1,6 @@
 import os
+from pathlib import Path
+from threading import Lock
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'   # 0=所有日志 1=过滤INFO 2=过滤
 import torch
 import torch.nn as nn
@@ -7,8 +9,6 @@ from transformers import BertModel, BertConfig, BertTokenizerFast
 from transformers import get_linear_schedule_with_warmup
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-from inquiry.qa_data import qa_data
-
 __all__=['get_answer','inquire']
 
 MAX_LEN   = 256
@@ -138,19 +138,47 @@ class FocalLoss(nn.Module):
             return loss.sum()
         return loss
 
-enhanced_model = EnhancedQAModel(
-    model_name="bert-base-chinese",
-    hidden_dropout_prob=0.2,
-    attention_probs_dropout_prob=0.2,
-    num_additional_layers=2,
-    use_focal_loss=True
-).to(device)  # 确保指定设备(GPU)
-# 模型加载
-# 从当前目录加载
-tokenizer = BertTokenizerFast.from_pretrained('bert-base-chinese')
-enhanced_model.load_state_dict(torch.load("inquiry/QG3_enhanced_qa_model.pth",weights_only=True))
+_runtime = None
+_runtime_lock = Lock()
 
-def encode_qa_pair(question,context, answer_text,tokenizer=tokenizer):
+
+def _load_runtime():
+    """Load the QA model on first inference instead of during package import."""
+    global _runtime
+    if _runtime is not None:
+        return _runtime
+    with _runtime_lock:
+        if _runtime is not None:
+            return _runtime
+        model_path = Path(
+            os.getenv(
+                "QGAI_QA_MODEL_PATH",
+                str(Path(__file__).with_name("QG3_enhanced_qa_model.pth")),
+            )
+        )
+        if not model_path.is_file():
+            raise FileNotFoundError(
+                f"QA model not found at {model_path}. Set QGAI_QA_MODEL_PATH."
+            )
+        runtime_tokenizer = BertTokenizerFast.from_pretrained("bert-base-chinese")
+        runtime_model = EnhancedQAModel(
+            model_name="bert-base-chinese",
+            hidden_dropout_prob=0.2,
+            attention_probs_dropout_prob=0.2,
+            num_additional_layers=2,
+            use_focal_loss=True,
+        ).to(device)
+        runtime_model.load_state_dict(
+            torch.load(model_path, map_location=device, weights_only=True)
+        )
+        runtime_model.eval()
+        _runtime = runtime_model, runtime_tokenizer
+        return _runtime
+
+
+def encode_qa_pair(question, context, answer_text, tokenizer=None):
+    if tokenizer is None:
+        _, tokenizer = _load_runtime()
     enc = tokenizer.encode_plus(
         question, context,
         max_length=MAX_LEN,
@@ -192,9 +220,12 @@ def collate_fn(batch):
     input_ids = torch.stack([item['input_ids'] for item in batch])
     start_pos = torch.stack([item['start_pos'] for item in batch])
     end_pos = torch.stack([item['end_pos'] for item in batch])
-    return input_ids, start_pos, end_pos\
+    return input_ids, start_pos, end_pos
 
-def train_enhanced_model():
+def train_enhanced_model(training_data):
+    """Train with caller-supplied data; private samples are never bundled."""
+    if not training_data:
+        raise ValueError("training_data must not be empty")
     # 超参数配置
     config = {
         "model_name": "bert-base-chinese",
@@ -224,7 +255,7 @@ def train_enhanced_model():
 
     # 准备数据
     tokenizer = BertTokenizerFast.from_pretrained(config["model_name"])
-    dataset = QADataset(tokenizer, qa_data)
+    dataset = QADataset(tokenizer, training_data)
     dataloader = DataLoader(
         dataset,
         batch_size=config["batch_size"],
@@ -304,54 +335,7 @@ def train_enhanced_model():
     # 保存模型
     torch.save(model.state_dict(), "QG3_enhanced_qa_model.pth")
     return model
-
-
-
-    # train_enhanced_model().to(device)
-    # 测试增强后的模型
-    test_questions = [
-        ("领取方式", "我去线下领取"),
-        ("常住地址", "广东工业大学生活西区西2-702"),
-        ("性别", "我的性别是男"),
-        ("原户籍地址", "我住在肇庆市嘉禾花园"),
-        ("原户口性质", "我是城镇户口"),
-        ("实际居住地址", "我现在一直住在广州"),
-        ("原户口派出所", "端州北派出所"),
-        ("申请落户地址", "广州市番禺区小谷围街道广东工业大学西100号"),
-        ("落户地派出所", "附近的派出所是小谷围街派出所"),
-        ("与申领人的关系", "我是申领人的哥哥"),
-        ("缴费所属年度" ,"今年是2024年"),
-        ("身份证件类型", "我的是中国人民共和国内地居民身份证件"),
-        ("身份证件类型", "我的是港澳人民身份证件"),
-        ("身份证件类型", "我的是台湾人民身份证件"),
-        ("开户银行", "我用的银行是中国农业银行"),
-        ("银行户名", "我要填的银行户名是陆潇锋"),
-        ("银行户名", "我公司的银行户名是华为有限公司"),
-        ("银行户名", "我要填的银行户名是佳沃炒粉个体经营"),
-        ("银行账号", "我的银行账号是13657313542452374"),
-        ("省", "我来自广东省"),
-        ("市", "我来自广东省肇庆市"),
-        ("区县（市）", "我来自广东省肇庆市德庆县"),
-        ("街道（乡镇）", "我来自广东省肇庆市端州区信安大道"),
-        ("村（社区）", "我来自广东省肇庆市端州区信安大道嘉禾花园"),
-        ("通讯地址", "额呃呃呃呃，我记得是广东省肇庆市端州区信安大道嘉禾花园"),
-        ("申请人身份", "我是大学生"),
-        ("财政补助对象", "我是低保户"),
-        ("电子邮箱", "2416048680@gmail.com"),
-        ("联系地址", "我的联系地址是广东省肇庆市端州区信安大道嘉禾花园"),
-        ("邮政编码", "我所居住的地方的邮政编码是999077"),
-        ("单位名称", "我在华为有限公司工作"),
-        ("纳税人识别号", "纳税人识别号是6875423255"),
-        ("开户银行名称", "中国农业银行"),
-        ("税款所属期", "2024年1月"),
-        ("关系", "我是陈英锐的朋友陆潇锋"),
-    ]
-
-    for q, c in test_questions:
-        pred = predict(enhanced_model, tokenizer, q, c)
-        print(f"Q: {q}\nC: {c}\nA: {pred}\n")
-
-def get_answer(answer, key_q, model=enhanced_model, tokenizer=tokenizer):
+def get_answer(answer, key_q, model=None, tokenizer=None):
     id_match = ""
     id_match = re.search(r'\d{17}[\dXx]', answer)
     if id_match:
@@ -365,8 +349,8 @@ def get_answer(answer, key_q, model=enhanced_model, tokenizer=tokenizer):
     if "申领原因" in key_q:
         return answer
 
-
-
+    if model is None or tokenizer is None:
+        model, tokenizer = _load_runtime()
     device = next(model.parameters()).device
     enc = tokenizer.encode_plus(
     key_q,

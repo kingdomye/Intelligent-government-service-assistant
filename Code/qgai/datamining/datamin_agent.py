@@ -1,9 +1,6 @@
 import json
-import os
-import asyncio
-from typing import AsyncGenerator, Optional
-
-from datamining.deal_flow_plus import generate_streaming_response
+from collections.abc import AsyncGenerator
+from pathlib import Path
 # from server.console import log
 
 
@@ -15,14 +12,22 @@ table_mark={
     "<DAT>":4,
 }
 
+DATA_DIR = Path(__file__).resolve().parent
+
+
 class DataMiningAgent:
-    def __init__(self, tables_path='tables.json',
-                 idx_path='name_to_idx.json',
-                 flow_path='flows.json',
-                 ):
-        assert os.path.exists(tables_path), f"{tables_path} does not exist"
-        assert os.path.exists(idx_path), f"{idx_path} does not exist"
-        assert os.path.exists(flow_path), f"{flow_path} does not exist"
+    def __init__(
+        self,
+        tables_path: str | Path = DATA_DIR / "tables.json",
+        idx_path: str | Path = DATA_DIR / "name_to_idx.json",
+        flow_path: str | Path = DATA_DIR / "flows.json",
+    ):
+        tables_path = Path(tables_path)
+        idx_path = Path(idx_path)
+        flow_path = Path(flow_path)
+        for path in (tables_path, idx_path, flow_path):
+            if not path.is_file():
+                raise FileNotFoundError(path)
 
         with open(idx_path, 'r', encoding='utf-8') as f:
             self.name_to_idx = json.load(f)
@@ -104,23 +109,31 @@ class DataMiningAgent:
     #     return 'mod error'
 
 
-    async def get_flow(self, idx: int, user_info:dict)->Optional[AsyncGenerator]:
+    async def get_flow(
+        self, idx: int, user_info: dict
+    ) -> AsyncGenerator[str, None] | None:
         """
         返回流程
         :param idx: table index(view in 'name_to_idx.json')
         :param user_info: user info
         :return:
         """
-        user_info['业务类型'] = self.idx_to_label(idx)
-        user_info = self.anonymize_user_data(user_info)
+        enriched_info = {**user_info, "业务类型": self.idx_to_label(idx)}
+        anonymized_info = self.anonymize_user_data(enriched_info)
         try:
-            flow = generate_streaming_response(user_info, raw_text=self.get_org_flow(idx))
+            from .deal_flow_plus import generate_streaming_response
+
+            flow = generate_streaming_response(
+                anonymized_info,
+                raw_text=self.get_org_flow(idx),
+            )
             return flow
         except ValueError:
             return None
 
 
-    def anonymize_user_data(self, user_info):
+    @staticmethod
+    def anonymize_user_data(user_info: dict) -> dict:
         """脱敏用户敏感信息"""
         anonymized = user_info.copy()
 
@@ -131,17 +144,22 @@ class DataMiningAgent:
                 anonymized['姓名'] = name[0] + '*' * (len(name) - 1)
 
         # 脱敏年龄范围
-        if '年龄' in anonymized:
-            age = anonymized['年龄']
-            if age < 20:
-                anonymized['年龄范围'] = str(age)
+        if "年龄" in anonymized:
+            age = anonymized["年龄"]
+            if not isinstance(age, (int, float)):
+                anonymized.pop("年龄")
+            elif age < 20:
+                anonymized["年龄范围"] = "0-19岁"
+                del anonymized["年龄"]
             elif age < 40:
                 anonymized['年龄范围'] = "20-39岁"
+                del anonymized["年龄"]
             elif age < 60:
                 anonymized['年龄范围'] = "40-59岁"
+                del anonymized["年龄"]
             else:
-                anonymized['年龄范围'] = str(age)
-            del anonymized['年龄']
+                anonymized['年龄范围'] = "60岁以上"
+                del anonymized["年龄"]
 
         # 移除其他敏感字段
         sensitive_fields = ['身份证号', '联系电话', '详细地址', "电子邮箱"]

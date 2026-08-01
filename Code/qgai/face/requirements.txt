@@ -1,9 +1,0 @@
-pillow~=11.3.0
-opencv-python~=4.11.0.86
-numpy~=1.26.4
-joblib~=1.5.1
-scikit-learn~=1.6.1
-insightface~=0.7.3
-cryptography~=45.0.5
-mindspore~=2.7.0rc1
-scipy~=1.13.1

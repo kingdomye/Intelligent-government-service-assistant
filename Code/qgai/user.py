@@ -1,640 +1,453 @@
-import functools
-import threading
-import json
+"""User session and asynchronous task primitives."""
+
+from __future__ import annotations
+
 import asyncio
-import time
-from typing import Optional, AsyncGenerator
-import functools
+import json
+import threading
+from collections.abc import AsyncGenerator, Callable, Coroutine, Iterator
+from concurrent.futures import Future
+from pathlib import Path
+from typing import Any
 
-from sympy import false
+from . import classify, datamining, face, inquiry
+from .lang import translate
 
-import inquiry
-import datamining
-import classify
-import face
-from lang import translate,detranslate
+__all__ = [
+    "User",
+    "TableFiller",
+    "AsyncModel",
+    "AsyncPredictLooper",
+    "AsyncTrainLooper",
+    "LoopBed",
+]
 
-__all__=['User','TableFiller', 'AsyncModel', 'AsyncPredictLooper','AsyncTrainLooper','LoopBed']
+DEFAULT_INFO_PATH = Path(__file__).with_name("user_info.json")
+with DEFAULT_INFO_PATH.open(encoding="utf-8") as default_info_file:
+    _default_info = json.load(default_info_file)
+
+DEFAULT_NECESSARY_INFO: dict[str, Any] = _default_info["necessary"]
+DEFAULT_ADDITIONAL_INFO: dict[str, Any] = _default_info["addition"]
+DEFAULT_MAIN_INFO = {**DEFAULT_NECESSARY_INFO, **DEFAULT_ADDITIONAL_INFO}
 
 
 class TableFiller:
-    def __init__(self, tables):
-        #表组
-        self.__tables = tables
+    """Track and fill a sequence of government-service forms."""
 
-        #表格遍历迭代器的序号-1
-        self.__index = -1
+    def __init__(self, tables: list[dict[str, Any]]):
+        if not isinstance(tables, list):
+            raise TypeError("tables must be a list")
+        self._tables = tables
+        self._pointer = 0
 
-        #当前填写表格的指针序号
-        self.__pointer = 0
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.table[key] = value
 
-    def __setitem__(self,key,value):
-        """
-        填写当前指针指向的表格
-        """
-        self.__tables[self.__pointer][key]=value
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        return self._tables[index]
 
+    def __iter__(self) -> Iterator[dict[str, Any]]:
+        return iter(self._tables)
 
     @property
-    def table(self):
-        """
-        返回当前所填表
-        :return:
-        """
-        return self.__tables[self.__pointer]
+    def table(self) -> dict[str, Any]:
+        if self.is_finish:
+            raise IndexError("all tables have been completed")
+        return self._tables[self._pointer]
 
     @table.setter
-    def table(self, table):
-        """
-        修改当前所填表
-        :param table: 修改内容
-        :return:
-        """
-        self.__tables[self.__pointer] = table
+    def table(self, table: dict[str, Any]) -> None:
+        if self.is_finish:
+            raise IndexError("all tables have been completed")
+        self._tables[self._pointer] = table
 
     @property
-    def tables(self):
-        return self.__tables
+    def tables(self) -> list[dict[str, Any]]:
+        return self._tables
 
     @property
-    def pointer(self):
-        return self.__pointer
+    def pointer(self) -> int:
+        return self._pointer
 
     @property
-    def is_finish(self):
-        return self.__pointer>=len(self.__tables)
+    def is_finish(self) -> bool:
+        return self._pointer >= len(self._tables)
 
     @property
-    def bussiness_type(self):
+    def bussiness_type(self) -> dict[str, int]:
+        """Compatibility alias; prefer :mod:`qgai.classify`."""
         return classify.type_dic
 
-    def __iter__(self):
-        self._index=-1
-        return self
-    def __next__(self):
-        self._index+=1
+    def reset_pointer(self) -> None:
+        self._pointer = 0
 
-        if self._index<len(self.__tables):
-            return self.__tables[self._index]
-        else:
-            raise StopIteration
-    def __getitem__(self, index):
-        return self.__tables[index]
-
-    def reset_pointer(self):
-        self.__pointer=0
-
-    def next_table(self):
-        """
-        导出当前所填表，并将pointer换到下一张表
-        :return:
-        """
-        table = self.__tables[self.__pointer]
-        self.__pointer+=1
-
+    def next_table(self) -> dict[str, Any]:
+        table = self.table
+        self._pointer += 1
         return table
 
 
+AsyncTask = Callable[..., Coroutine[Any, Any, Any]]
+
+
 class AsyncModel:
-    """
-    在其他线程的异步操作上分支出一个新的异步的操作，并在执行时加入循环
-    """
+    """Schedule one coroutine at a time on a background event loop."""
+
     processing = -2147483648
-    def __init__(self, task,loop:asyncio.AbstractEventLoop,wait_time=5):
-        """
-        创建一个异步操作模块
-        :param task: 一个函数，必须为async的异步函数
-        """
-        self.__result = None
 
-        self.__task = task
-        self.__loop = loop
-
-        self.__history=[]
-
+    def __init__(
+        self,
+        task: AsyncTask,
+        loop: asyncio.AbstractEventLoop,
+        wait_time: float = 5,
+    ):
+        self._future: Future[Any] | None = None
+        self._task = task
+        self._loop = loop
+        self._history: list[Any] = []
+        self._lock = threading.Lock()
         self.wait_time = wait_time
-    def __call__(self,*args):
+
+    def __call__(self, *args: Any) -> Any:
         return self.activate(*args)
-    def __getitem__(self, index):
-        """
-        获取历史记录，若未执行过，则返回None
-        """
-        if abs(index)>len(self.__history) or index==len(self.__history):
+
+    def __getitem__(self, index: int) -> Any | None:
+        try:
+            return self._history[index]
+        except IndexError:
             return None
 
-        return self.__history[index]
+    def activate(self, *args: Any) -> Any:
+        with self._lock:
+            if self._future is None:
+                if not self._loop.is_running():
+                    raise RuntimeError("background event loop is not running")
+                self._future = asyncio.run_coroutine_threadsafe(
+                    self._task(*args),
+                    self._loop,
+                )
+            if not self._future.done():
+                return self.processing
+            completed = self._future
+            self._future = None
 
-    @property
-    def __get_task(self):
-        return self.__task
+        value = completed.result()
+        self._history.append(value)
+        return value
 
-    def activate(self,*args):
-        """
-        调用异步函数，在异步结束前会返回processing=-2147483648
-        :param args: 原函数的参数
-        :return: 原函数的返回值或者processing=-2147483648
-        """
-        print("async activate")
-        time.sleep(0.01)
-        #无异步操作，则创建
-        if self.__result is None:
-            self.__result = asyncio.run_coroutine_threadsafe(self.__task(*args), self.__loop)
-        print(self.__result.running())
-        #异步操作已完成
-        if self.__result.done():
-            value = self.__result.result()
-            print(value)
-            self.__history.append(value)
-            # 重置异步器
-            self.__result = None
-            return value
-        #异步进行中
-        else:
-            if False and not self.__result.running():
-                print("because an unexpected problem,async task isn't running,had run again now")
-                self.__result = asyncio.run_coroutine_threadsafe(self.__task(*args), self.__loop)
-                return self.activate(*args)
-            return -2147483648
-
-    async def async_activate(self,*args):
-        value = await self.__task(*args)
-        self.__history.append(value)
+    async def async_activate(self, *args: Any) -> Any:
+        value = await self._task(*args)
+        self._history.append(value)
         return value
 
     @property
-    def done(self):
-        if self.__result is None:
-            return True
-        return self.__result.done()
+    def done(self) -> bool:
+        return self._future is None or self._future.done()
+
+    def cancel(self) -> bool:
+        return self._future.cancel() if self._future is not None else False
 
 
 class LoopBed:
+    """Own an asyncio event loop running on a daemon thread."""
+
     def __init__(self):
-        self.__loop = asyncio.new_event_loop()
+        self._loop = asyncio.new_event_loop()
+        self._thread: threading.Thread | None = None
+        self._ready = threading.Event()
 
     @property
-    def is_running(self):
-        return self.__loop.is_running()
+    def is_running(self) -> bool:
+        return self._loop.is_running()
 
     @property
-    def loop(self):
-        return self.__loop
+    def loop(self) -> asyncio.AbstractEventLoop:
+        return self._loop
 
-    def create_new_task(self,async_func)->AsyncModel:
-        return AsyncModel(async_func, self.__loop)
+    def create_new_task(self, async_func: AsyncTask) -> AsyncModel:
+        return AsyncModel(async_func, self._loop)
 
-    def __looping(self):
-        self.__loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.__loop)
-        self.__loop.run_forever()
+    def _run(self) -> None:
+        asyncio.set_event_loop(self._loop)
+        self._ready.set()
+        self._loop.run_forever()
 
-    def looping_on_new_thread(self):
-        threading.Thread(target=self.__looping).start()
-        threading.excepthook = LoopBed.expection_hook
+    def looping_on_new_thread(self) -> "LoopBed":
+        if self._thread is not None and self._thread.is_alive():
+            return self
+        self._thread = threading.Thread(
+            target=self._run,
+            name="qgai-event-loop",
+            daemon=True,
+        )
+        self._thread.start()
+        if not self._ready.wait(timeout=5):
+            raise RuntimeError("background event loop failed to start")
         return self
 
-    @staticmethod
-    def nonblock(wait_time=5):
-        """
-        用于在此床上创建非阻塞方法的装饰器，调用此函数时将会返回一个非阻塞异步模块
-        :param wait_time:最大等待时间
-        """
-        return lambda func: AsyncModel(task=func, loop=asyncio.get_event_loop(), wait_time=wait_time)
+    def stop(self) -> None:
+        if self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._thread is not None:
+            self._thread.join(timeout=5)
 
     @staticmethod
-    def expection_hook(args):
-        print(f"子线程异常: {args.exc_value}")
+    def nonblock(wait_time: float = 5):
+        def decorate(func: AsyncTask) -> AsyncModel:
+            return AsyncModel(func, asyncio.get_event_loop(), wait_time=wait_time)
+
+        return decorate
+
 
 class AsyncLooper:
-    def __init__(self,func):
-        self.__loop = None
-        self.__async_models={}
-        self.__task=func
+    def __init__(self, func: AsyncTask):
+        self._bed = LoopBed()
+        self._async_models: dict[str, AsyncModel] = {}
+        self._task = func
 
-    def __getitem__(self, id)->AsyncModel:
-        return self.__async_models[id]
+    def __getitem__(self, identifier: str) -> AsyncModel:
+        return self._async_models[identifier]
 
-    def __contains__(self,id)->bool:
-        return (id in self.__async_models)
+    def __contains__(self, identifier: str) -> bool:
+        return identifier in self._async_models
 
-    def __delitem__(self, id):
-        del self.__async_models[id]
+    def __delitem__(self, identifier: str) -> None:
+        del self._async_models[identifier]
 
+    def append(self, identifier: str) -> None:
+        self._async_models[identifier] = self._bed.create_new_task(self._task)
 
-    def append(self,id):
-        self.__async_models[id] = AsyncModel(self.__task, self.__loop)
+    def run_loop(self) -> None:
+        self._bed.looping_on_new_thread()
 
-    def run_loop(self):
-        self.__loop = asyncio.new_event_loop()
-        self.__loop.run_forever()
-
-    def run_loop_on_new_thread(self):
-        threading.Thread(target=self.run_loop).start()
+    def run_loop_on_new_thread(self) -> None:
+        self.run_loop()
 
 
 class AsyncPredictLooper(AsyncLooper):
     def __init__(self):
-        super().__init__(AsyncPredictLooper.async_predict_face)
+        super().__init__(self.async_predict_face)
 
     @staticmethod
-    async def async_predict_face(imgs_bin)->Optional[str]:
+    async def async_predict_face(imgs_bin: list[bytes]) -> str | None:
         return face.cv2_predict(imgs_bin)
+
 
 class AsyncTrainLooper(AsyncLooper):
     def __init__(self):
-        super().__init__(AsyncTrainLooper.async_train_face)
+        super().__init__(self.async_train_face)
 
     @staticmethod
-    async def async_train_face(user_id,imgs_bin) -> Optional[str]:
-        return face.cv2_train(imgs_bin,user_id)
+    async def async_train_face(user_id: str, imgs_bin: list[bytes]) -> bool:
+        return face.cv2_train(imgs_bin, user_id)
 
-default_nes_info=json.loads(open('user_info.json','r').read())['necessary']
-default_adt_info=json.loads(open('user_info.json','r').read())['addition']
-
-
-default_main_info=default_nes_info.copy()
-default_main_info.update(default_adt_info)
 
 class User:
-
-    def __init__(self, info_dic: dict,loop_bed:LoopBed):
-        """
-        初始化一个用户
-        :param info_dic: 数据库中保存的所有的信息，包含所有必要信息和已有的基本信息
-        """
-
-        #业务数据库
+    def __init__(self, info_dic: dict[str, Any], loop_bed: LoopBed):
         self._data = datamining.DataMiningAgent()
+        self._main_info = {**DEFAULT_MAIN_INFO, **info_dic}
+        self._once_info: dict[str, Any] = {}
+        self._label: int | None = None
+        self._flow: str | None = None
+        self._tables_filler: TableFiller | None = None
+        self._loop_bed = loop_bed
 
-        #直接录入必要+基本信息
-        self.__main_info=info_dic
+        self._get_answer_res = loop_bed.create_new_task(self._get_answer)
+        self._inquire_res = loop_bed.create_new_task(self._inquire)
+        self._classify_res = loop_bed.create_new_task(self._classify)
+        self._get_flow_res = loop_bed.create_new_task(self._get_flow)
+        self._train_face_res = loop_bed.create_new_task(self._train_face)
+        self._predict_face_res = loop_bed.create_new_task(self._predict_face)
+        self._init_res = loop_bed.create_new_task(self._initialize)
 
-        #一次性信息
-        self.__once_info_dic={}
-
-
-
-        #当前业务流程标签
-        self.__label=None
-
-        #业务流程
-        self.__flow=None
-
-        #表组迭代器
-        self.__tables_filler = None
-
-
-
-
-        self.__loop_bed=loop_bed
-        self.__get_answer_res= self.__loop_bed.create_new_task(self.__get_answer)
-        self.__inquire_res = self.__loop_bed.create_new_task(self.__inquire)
-        self.__classify_res=self.__loop_bed.create_new_task(self.__classify)
-        self.__get_flow_res=self.__loop_bed.create_new_task(self.__get_flow)
-        self.__train_face_res=self.__loop_bed.create_new_task(self.__train_face)
-        self.__predict_face_res=self.__loop_bed.create_new_task(self.__predict_face)
-
-        self.__init_res = self.__loop_bed.create_new_task(self.__init)
-
-
-        #检查必要信息
-        for key in default_nes_info:
-            if key not in info_dic:
-                a=1
-                # raise Exception("Missing necessary information")
-
-        #检查多于信息
-        return
-
-    def __setitem__(self, key, value):
-        """
-        录入用户信息
-        :param key: 用户信息键
-        :param value: 用户信息值
-        :return:
-        """
-        if key in default_main_info:
-            self.__main_info[key]=value
-        else:
-            self.__once_info_dic[key]=value
-
-
+    def __setitem__(self, key: str, value: Any) -> None:
+        target = self._main_info if key in DEFAULT_MAIN_INFO else self._once_info
+        target[key] = value
 
     @property
-    def info(self)->dict:
-        """
-        用户的所有信息
-        :return:
-        """
-        once_tb = self.once_info.copy()
-        once_tb.update(self.main_info)
-        res = {}
-        for key in once_tb:
-            zhcn = translate(key)
-            res[zhcn if zhcn is not None else key]=once_tb[key]
-        return res
-    @property
-    def main_info(self):
-        """
-        用户的主要信息，即必要信息+基本信息
-        :return:
-        """
-        return self.__main_info
-    @property
-    def once_info(self):
-        """
-        用户的一次性信息，不会录入数据库，下次需要重新询问
-        :return:
-        """
-        return self.__once_info_dic
-
+    def info(self) -> dict[str, Any]:
+        combined = {**self._once_info, **self._main_info}
+        return {(translate(key) or key): value for key, value in combined.items()}
 
     @property
-    def label(self):
-        if not self.__label is None:
-            return self.__label
-        if not self.classify[-1] is None:
-            return self.classify[-1]
-
-        raise Exception("please activate classify at least once first")
-    @property
-    def bus_type(self):
-        """
-        用户要办理的业务类型，将会把label对应到相应的文本
-        :return:
-        """
-        invert_dic = dict(zip(classify.type_dic.values(), classify.type_dic.keys()))
-        return invert_dic[self.label]
-
-
+    def main_info(self) -> dict[str, Any]:
+        return self._main_info
 
     @property
-    def flow(self)->str:
-        """
-        此用户的业务流程
-        :return: 用户流程的纯文本
-        """
-        if not self.__flow is None:
-            return self.__flow
-        if not self.get_flow[-1] is None:
-            return self.get_flow[-1]
-        raise Exception("please activate get_flow at least once first")
-
+    def once_info(self) -> dict[str, Any]:
+        return self._once_info
 
     @property
-    def tables(self):
-        """
-        返回所有的表格
-        :return:
-        """
+    def label(self) -> int:
+        if self._label is not None:
+            return self._label
+        previous = self.classify[-1]
+        if previous is None:
+            raise RuntimeError("classify must complete before reading label")
+        return previous
+
+    @property
+    def bus_type(self) -> str:
+        labels_by_id = {value: key for key, value in classify.type_dic.items()}
+        try:
+            return labels_by_id[self.label]
+        except KeyError as exc:
+            raise RuntimeError(f"unsupported business label: {self.label}") from exc
+
+    @property
+    def flow(self) -> str:
+        if self._flow is not None:
+            return self._flow
+        previous = self.get_flow[-1]
+        if previous is None:
+            raise RuntimeError("get_flow must complete before reading flow")
+        return previous
+
+    @property
+    def tables(self) -> list[dict[str, Any]]:
         return self.tables_filler.tables
+
     @tables.setter
-    def tables(self,value:list):
-        self.__tables_filler = TableFiller(value)
+    def tables(self, value: list[dict[str, Any]]) -> None:
+        self._tables_filler = TableFiller(value)
+
     @property
-    def tables_filler(self)->TableFiller:
-        """
-        一个TableFiller类型的变量，用于填充表格
-        :return: 填表迭代器
-        """
-        if self.__tables_filler is None:
-            raise Exception("please activate get_flow at least once first")
-        return self.__tables_filler
-    def fill_in_table(self):
-        """
-        此方法将会把现在用户已有的所有，表格需要的信息填入表中，将会对传入的参数做出改变
-        :param table: 所填表格，需要填写的值为None
-        :return: 返回一个填完的表格
-        """
-        #遍历表格中的键
-        for key in self.tables_filler.table:
+    def tables_filler(self) -> TableFiller:
+        if self._tables_filler is None:
+            raise RuntimeError("user has not been initialized")
+        return self._tables_filler
 
-            #遍历特殊标记
-            for mark in datamining.table_mark:
-                if mark is None:
-                    break
-            #跳过已填的值
-            if not self.tables_filler.table[key] is None and not self.tables_filler.table[key] == '':
-                continue
+    def fill_in_table(self) -> None:
+        current_table = self.tables_filler.table
+        info = self.info
+        for key, value in current_table.items():
+            if value in (None, "") and key in info:
+                self.tables_filler[key] = info[key]
 
-            #如果有对应的键值，填充表格
-            if key in self.info:
-                self.tables_filler[key]=self.info[key]
-        return
-    def export_tables(self):
-        """
-        导出所有表格为前端接口的形式
-        """
-        tables = []
-        for table in self.tables:
-            header = {}
-            row = []
-            for key in table:
-                header[key] = key
-                row.append(table[key])
-            tables.append({'header':header, 'row':row})
+    def export_tables(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "header": {key: key for key in table},
+                "row": list(table.values()),
+            }
+            for table in self.tables
+        ]
 
-        return tables
-
-
-
-    async def __inquire(self):
-        """
-        对当前表进行询问，inquire的异步封装
-        :return:
-        """
-        print("inquire")
+    async def _inquire(self):
         if self.tables_filler.is_finish:
             return None
         question = inquiry.inquire(self.tables_filler.table)
         if question is None:
             return None
-        return list(question.keys())[0],list(question.values())[0]         #key,sentence
+        return next(iter(question.items()))
+
     @property
-    def inquire(self)->AsyncModel:
-        """
-        询问模块的异步模块封装
-        :return:
-        """
-        return self.__inquire_res
+    def inquire(self) -> AsyncModel:
+        return self._inquire_res
+
     def inquire_func(self):
-        """
-        对当前table_filler指向的表进行询问，本质为异步操作
-        :return:
-        """
-        return self.__inquire_res.activate()
+        return self._inquire_res.activate()
 
-
-    async def __get_answer(self,text:str,key:str)->str:
-        """
-        对用户自然语言回答进行关键字提取，get_answer的异步封装
-        :param text: 用户自然语言
-        :param key: 问题键
-        :return: 提取的关键字
-        """
-        print("get_answer")
+    async def _get_answer(self, text: str, key: str) -> str:
         return inquiry.get_answer(text, key)
+
     @property
-    def get_answer(self)->AsyncModel:
-        """
-        提取回答模块的异步模块封装
-        :return:
-        """
-        return self.__get_answer_res
-    def get_answer_func(self,text:str,key:str):
-        """
-        对用户自然语言回答进行关键字提取，本质为异步操作
-        :param text: 用户自然语言
-        :param key: 问题键
-        :return: 结束时返回用户回答的关键字，过程中详见UserAsyncModel
-        """
-        return self.__get_answer_res.activate(text,key)
+    def get_answer(self) -> AsyncModel:
+        return self._get_answer_res
 
+    def get_answer_func(self, text: str, key: str):
+        return self._get_answer_res.activate(text, key)
 
-    async def __classify(self,require)->int:
-        """
-        用户业务分类的异步封装
-        :param require: 用户需求的自然语言
-        :return: 返回用户业务类别对应的label值
-        """
-        print("classify")
-        self.__label = classify.classify(require, classify.type_dic)
-        return self.__label
+    async def _classify(self, requirement: str) -> int | None:
+        self._label = classify.classify(requirement, classify.type_dic)
+        return self._label
+
     @property
-    def classify(self)->AsyncModel:
-        """
-        用户业务分类的异步模块封装
-        :return:
-        """
-        return self.__classify_res
-    def classify_func(self,require)->int:
-        """
-        用户业务分类，本质为异步操作
-        :param require: 用户需求的自然语言
-        :return: 结束时返回用户业务类别对应的label值，过程中详见UserAsyncModel
-        """
-        return self.__classify_res.activate(require)
+    def classify(self) -> AsyncModel:
+        return self._classify_res
 
-    async def __get_flow(self)->str:
-        """
-        获取流程的异步封装
-        :return:
-        """
-        print("get_flow")
-        self.__flow = 1
-        print("get_flow111111")
-        self.__flow = self._data.get_flow(self.label, self.info)
-        print("get_flow222222222222")
-        return self.__flow
+    def classify_func(self, requirement: str):
+        return self._classify_res.activate(requirement)
+
+    async def _get_flow(self) -> str:
+        stream = await self._data.get_flow(self.label, self.info)
+        if stream is None:
+            raise RuntimeError("flow generator is unavailable")
+        chunks = [chunk async for chunk in stream]
+        self._flow = "".join(chunks)
+        return self._flow
+
     @property
-    def get_flow(self)->AsyncModel:
-        """
-        获取流程模块的异步模块封装
-        :return:
-        """
-        return self.__get_flow_res
-    def get_flow_func(self)->str:
-        """
-        获取用户当前分类的流程，本质为异步操作
-        :return:
-        """
-        return self.__get_flow_res.activate(self.__label, self.info)
+    def get_flow(self) -> AsyncModel:
+        return self._get_flow_res
 
-    async def __train_face(self, user_id, imgs_bin)->bool:
-        return face.cv2_train(imgs_bin,user_id)
+    def get_flow_func(self):
+        return self._get_flow_res.activate()
+
+    async def _train_face(self, user_id: str, imgs_bin: list[bytes]) -> bool:
+        return face.cv2_train(imgs_bin, user_id)
+
     @property
-    def train_face(self)->AsyncModel:
-        return self.__train_face_res
-    def enter_face_func(self,user_id,imgs_bin)->bool:
-        return self.__train_face_res.activate(user_id, imgs_bin)
+    def train_face(self) -> AsyncModel:
+        return self._train_face_res
 
-    async def __predict_face(self,imgs_bin)->Optional[str]:
+    def enter_face_func(self, user_id: str, imgs_bin: list[bytes]):
+        return self._train_face_res.activate(user_id, imgs_bin)
+
+    async def _predict_face(self, imgs_bin: list[bytes]) -> str | None:
         return face.cv2_predict(imgs_bin)
+
     @property
-    def predict_face(self)->AsyncModel:
-        return self.__predict_face_res
-    def predict_face_func(self,imgs_bin)->Optional[str]:
-        return self.__predict_face_res.activate(imgs_bin)
+    def predict_face(self) -> AsyncModel:
+        return self._predict_face_res
 
+    def predict_face_func(self, imgs_bin: list[bytes]):
+        return self._predict_face_res.activate(imgs_bin)
 
-    async def qna_hosting(self,hoster:AsyncGenerator):
-        """
-        询问回答环节的托管器，严格遵守NetAPI中的阻塞模式
-        :param hoster:websocket的生成器对象
-        :return:
-        """
-        while True:
-            try:
-                # 已完成所有表格
-                if self.tables_filler.is_finish:
-                    await hoster.asend("")                          # send
-                    return True
-                else:
-                    #获取问题
-                    inquire = await self.__inquire()
-                    #完成此表格，下一张
-                    if inquire is None:
-                        self.tables_filler.next_table()
-                        continue
-                    else:
-                        #发送问题
-                        key,question = inquire
-                        await hoster.asend(question)                # send
+    async def qna_hosting(self, hoster: AsyncGenerator):
+        while not self.tables_filler.is_finish:
+            question_data = await self._inquire()
+            if question_data is None:
+                self.tables_filler.next_table()
+                continue
+            key, question = question_data
+            await hoster.asend(question)
+            answer = await hoster.__anext__()
+            value = await self._get_answer(answer, key)
+            self.tables_filler[key] = value
+            self[key] = value
+        await hoster.asend("")
+        return True
 
-                        #获取回答
-                        answer = await hoster.__anext__()           # recieve
-                        value = await self.__get_answer(answer,key)
-                        #填写答案
-                        self[key] = value
+    async def train_hosting(
+        self,
+        hoster: AsyncGenerator,
+        user_id: str,
+        need_num: int = 50,
+    ) -> bool:
+        face_images = []
+        async for image in hoster:
+            feature = face.face_fetcher(image)
+            if feature is not None:
+                face_images.append(feature)
+            if len(face_images) >= need_num:
+                success = await self._train_face(user_id, face_images)
+                await hoster.asend("success" if success else "failed")
+                return success
+            await hoster.asend("continue")
+        return False
 
-            except StopIteration:
-                return False
+    async def _initialize(self, requirement: str) -> tuple[int, str]:
+        label = await self._classify(requirement)
+        if label is None:
+            raise ValueError("无法识别对应的政务服务类型")
+        tables = self._data.get_tables(label)
+        if tables == ["-1"]:
+            raise ValueError(f"找不到业务 {label} 对应的表格")
+        self.tables = tables
+        flow = await self._get_flow()
+        return label, flow
 
-    async def train_hosting(self,hoster:AsyncGenerator,user_id,need_num = 50):
-        """
-        人脸录入环节的托管器，严格遵守NetAPI中的阻塞模式
-        :param hoster:websocket
-        """
-        fetchers = []
-        #接收图片
-        async for img in hoster:                                    # recieve
-            #截获数量足够
-            if len(fetchers)>50:
-                await self.__train_face(user_id,fetchers)
-                await hoster.asend("success")                       # send
-                return True
-            else:
-                #提取特征部分
-                fetcher = face.face_fetcher(img)
-                #检测到人脸，加入特征集
-                if fetcher is not None:
-                    fetchers.append(fetcher)
-                await hoster.asend("continue")                      # send
-
-
-
-
-
-
-
-
-
-    async def __init(self,require):
-        """
-        将会初始化如下内容
-        classify：label
-        get_flow：flow
-        table.setter：tablefiller
-        """
-        print("init")
-        self.tables = self._data.get_tables(await self.__classify(require))
-        print("classify done")
-        print(await self.__get_flow())
-
-        print("flow done")
-        print("init done")
-        return self.label, self.flow
     @property
-    def init(self)->AsyncModel:
-        return self.__init_res
-
+    def init(self) -> AsyncModel:
+        return self._init_res

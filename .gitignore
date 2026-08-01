@@ -1,10 +1,49 @@
-/Code/qgai/server/__pycache__
-/Code/qgai/datamining/__pycache__
-/Code/qgai/.idea
-/Code/front/node_modules
-/Code/qgai/testpng
-/Code/qgai/inquiry/QuestionAndAnswer(On-Premises&Revised)/__pycache__
-
-/Code/qgai/inquiry/QuestionAndAnswer(On-Premises&Revised)/__pycache__
+# Operating systems and editors
 .DS_Store
-Code/qgai/face/face_trainer_bayes/.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+tests/
+.venv/
+venv/
+env/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+HF_API_TOKEN.env
+
+# JavaScript
+node_modules/
+dist/
+
+# Models, generated data, and runtime output
+*.jar
+*.zip
+*.pth
+*.pt
+*.pkl
+*.wav
+*.webm
+*.pptx
+offload_inference/
+face_models/
+private/
+local-data/
+training-data/
+unknown_response.json
+test*.jpg
+test*.png
+test*.webm

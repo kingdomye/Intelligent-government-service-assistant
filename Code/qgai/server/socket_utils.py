@@ -1,100 +1,90 @@
-import websockets
+"""WebSocket transport for face and speech utilities."""
+
+from __future__ import annotations
+
 import asyncio
+import json
 import threading
+from typing import Any
+
+from .console import log
+from .variable_pool import socket_utils_host, socket_utils_port
 
 
-from console import log
-import face
-import voice
+def _request_path(websocket: Any) -> str:
+    request = getattr(websocket, "request", None)
+    return getattr(request, "path", "")
 
 
+async def _face_predict(websocket: Any) -> None:
+    from .. import face
 
-async def utils_handle(websocket:websockets.ClientConnection, path=""):
-    if path == "":
-        await websocket.send("please add path")
-        await websocket.close(400,"please add path")
+    predictions: dict[str, int] = {}
+    required_samples = 50
+    total = 0
+    async for image in websocket:
+        if not isinstance(image, bytes):
+            continue
+        extracted = face.face_fetcher(image)
+        if extracted is None:
+            continue
+        predicted_id = face.cv2_predict([extracted], min_acc=0.5)
+        if predicted_id is not None:
+            predictions[predicted_id] = predictions.get(predicted_id, 0) + 1
+        total += 1
+
+        response = {"user_id": "", "type": "face_predict", "hash": "", "message": "continue"}
+        if total >= required_samples and predictions:
+            best_user, count = max(predictions.items(), key=lambda item: item[1])
+            if count >= required_samples * 0.5:
+                response.update(user_id=best_user, message="success")
+        await websocket.send(json.dumps(response, ensure_ascii=False))
+        if response["message"] == "success":
+            return
+
+
+async def utils_handle(websocket: Any) -> None:
+    path = _request_path(websocket)
+    if path == "/face_predict":
+        await _face_predict(websocket)
         return
 
-    elif path == "/face_predict":
-        user_id_counter={}
-        need_times = 50
-        acc = 0.5
-        user_id = ""
-        message = "continue"
+    if path == "/tts":
+        from ..voice import text2voice
 
-        total = 0
-        async for img in websocket:
-            # 截取特征部分
-            feature = face.face_fetcher(img)
-            if feature is None:
-                continue
-            # 如果特征不为none识别特征部分
-            else:
-                predict_id = face.cv2_predict([img], min_acc=0.5)
-                user_id_counter[predict_id] = user_id_counter[predict_id]+1 if predict_id in user_id_counter.keys() else 1
-                total += 1
-
-            # 识别次数足够
-            if total > need_times:
-                max_user = list(user_id_counter.keys())[0]
-                count = list(user_id_counter.values())[0]
-                # 计算最大准确率者
-                for key in user_id_counter:
-                    if user_id_counter[key]>user_id_counter[max_user]:
-                        max_user = key
-                        count = user_id_counter[max_user]
-
-                # 如果低于阈值，重新开始
-                if count <need_times*acc:
-                    user_id_counter = {}
-                # 识别成功，响应
-                else:
-                    user_id = max_user
-                    message = "success"
-
-            response = {
-                "user_id": user_id,
-                "type": "face_predict",
-                "hash": "",
-
-                "message": message
-            }
-
-            # 发送响应信息
-            await websocket.send(response)
-            if message == "success":
-                await websocket.close(200,"success")
-                return
-
-    elif path == "/tts":
         async for text in websocket:
+            if not isinstance(text, str):
+                raise ValueError("TTS input must be text")
+            await websocket.send(text2voice(text))
+        return
 
-    elif path == "/stt":
+    if path == "/stt":
+        from ..voice import voice2text
+
         async for sound in websocket:
-            pcm = voice.bin2pcm(sound)
-            text = voice.voice2text(pcm)
-            await websocket.send(text)
+            if not isinstance(sound, bytes):
+                raise ValueError("STT input must be binary audio")
+            await websocket.send(voice2text(sound))
+        return
+
+    await websocket.send(json.dumps({"type": "error", "message": "unknown path"}))
+    await websocket.close(code=4004, reason="unknown path")
 
 
+async def begin() -> None:
+    import websockets
 
-
-
-
-
-
-async def begin():
-    async with websockets.serve(handler=utils_handle, host="192.168.58.1", port=33042):
+    async with websockets.serve(utils_handle, socket_utils_host, socket_utils_port):
+        log(f"utility WebSocket started on {socket_utils_host}:{socket_utils_port}")
         await asyncio.Future()
 
 
-def run():
-    threading.Thread(target=asyncio.run,args = (begin(),)).start()\
-
-
-
-
-
-
-
-
-
+def run() -> threading.Thread:
+    thread = threading.Thread(
+        target=asyncio.run,
+        args=(begin(),),
+        name="qgai-utility-websocket",
+        daemon=True,
+    )
+    thread.start()
+    return thread

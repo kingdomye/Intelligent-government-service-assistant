@@ -1,4 +1,3 @@
-from lang.translate import translate,detranslate
+from .translate import detranslate, translate
 
-__all__ = ['translate','detranslate']
-
+__all__ = ["translate", "detranslate"]

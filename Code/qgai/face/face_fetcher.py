@@ -1,7 +1,6 @@
 # ================================
 # @File         : face_fetcher.py
 # @Time         : 2025/07/30
-# @Author       : Yingrui Chen
 # @description  : 人脸检测函数
 #                 输入：二进制、三通道图像数据
 #                 输出：人脸CV图像，没有人脸则返回None
@@ -9,8 +8,8 @@
 
 import cv2
 import numpy as np
-from model_loader import get_components
-from utils.face_utils import img_to_bin
+from .model_loader import get_components
+from .utils.face_utils import img_to_bin
 
 # 加载模型组件
 components = get_components()

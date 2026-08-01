@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intelligent-government-service-assistant"
+version = "1.1.0"
+description = "A multi-agent assistant for accessible government services"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+dependencies = [
+  "pycryptodome>=3.23,<4",
+  "requests>=2.32,<3",
+  "websockets>=15,<16",
+]
+
+[project.optional-dependencies]
+speech = [
+  "ffmpeg-python>=0.2,<1",
+  "librosa>=0.11,<1",
+  "numpy>=2.0,<3",
+  "openai-whisper>=20250625",
+  "opencc-python-reimplemented>=0.1.7,<1",
+  "pyttsx3>=2.98,<3",
+  "torch>=2.5,<3",
+]
+face = [
+  "cryptography>=45,<46",
+  "insightface>=0.7.3,<1",
+  "joblib>=1.5,<2",
+  "mindspore>=2.7,<3",
+  "numpy>=2.0,<3",
+  "opencv-python>=4.12,<5",
+  "pillow>=11.1,<12",
+  "scikit-learn>=1.6,<2",
+]
+local-llm = [
+  "bitsandbytes>=0.46,<1",
+  "peft>=0.17,<1",
+  "torch>=2.5,<3",
+  "transformers>=4.54,<5",
+]
+qa = [
+  "torch>=2.5,<3",
+  "tqdm>=4.67,<5",
+  "transformers>=4.54,<5",
+]
+dev = [
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+qgai = "qgai.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "Code"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["Code"]
+include = ["qgai*"]
+
+[tool.setuptools.package-data]
+qgai = ["user_info.json", "lang/*.lang", "datamining/*.json"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
