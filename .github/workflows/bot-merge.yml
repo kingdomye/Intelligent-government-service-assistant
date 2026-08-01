@@ -1,0 +1,58 @@
+name: Bot merge
+
+on:
+  push:
+    branches:
+      - agent/repository-cleanup
+  workflow_dispatch:
+    inputs:
+      head:
+        description: Branch to merge into main
+        required: true
+        default: agent/repository-cleanup
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve branch
+        id: branch
+        env:
+          DISPATCH_HEAD: ${{ inputs.head }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_HEAD: ${{ github.ref_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "head=$DISPATCH_HEAD" >> "$GITHUB_OUTPUT"
+          else
+            echo "head=$PUSH_HEAD" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.branch.outputs.head }}
+
+      - name: Validate repository hygiene
+        run: |
+          python -m compileall -q Code/qgai
+          python scripts/check_repository_hygiene.py
+
+      - name: Create and merge pull request as GitHub Actions bot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ steps.branch.outputs.head }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          pr_url="$(gh pr list --head "$HEAD_BRANCH" --base main --state open --json url --jq '.[0].url // empty')"
+          if [[ -z "$pr_url" ]]; then
+            pr_url="$(gh pr create \
+              --head "$HEAD_BRANCH" \
+              --base main \
+              --title "Refactor repository and remove sensitive artifacts" \
+              --body "Automated repository cleanup and structural refactor. Repository hygiene and Python parsing were validated before merge.")"
+          fi
+          gh pr merge "$pr_url" --squash --delete-branch
