@@ -1,53 +1,44 @@
-from user import User,TableFiller,AsyncModel,AsyncPredictLooper,AsyncTrainLooper,LoopBed
-from server.cipher import AESCipher,ChiperBase
-from console import log
+"""Shared in-memory server state."""
+
+from __future__ import annotations
+
+import threading
+from typing import TYPE_CHECKING
+
+from ..config import settings
+from .cipher import AESCipher, ChiperBase
+from .console import log
+
+if TYPE_CHECKING:
+    from ..user import User
+
+http_host = settings.http_host
+http_port = settings.http_port
+socket_utils_host = settings.utils_ws_host
+socket_utils_port = settings.utils_ws_port
+socket_process_host = settings.process_ws_host
+socket_process_port = settings.process_ws_port
+
+user_dic: dict[str, "User"] = {}
+user_lock = threading.RLock()
+aes_cipher = AESCipher(settings.aes_key) if settings.aes_key else ChiperBase()
 
 
-
-http_host= "192.168.58.1"
-http_port=10925
-
-socket_utils_host="192.168.58.1"
-socket_utils_port=3304
-
-socket_process_host="192.168.58.1"
-socket_process_port=444
-
-
-user_dic = {}
-loop_beds={}
-
-#aes_cipher = AESCipher("1234567890123456")
-aes_cipher = ChiperBase()
-
-# predict_process = AsyncPredictLooper()
-# predict_process.run_loop_on_new_thread()
-#
-# train_process = AsyncTrainLooper()
-# train_process.run_loop_on_new_thread()
-
-
-def processing_response(user_id, flow_hash,message = ""):
-    log("\"%s\" is request but processing" % (user_id))
-    response = {
+def processing_response(user_id: str, flow_hash: str, message: str = "") -> dict:
+    log(f'"{user_id}" request is still processing')
+    return {
         "user_id": user_id,
         "type": "processing",
         "hash": flow_hash,
-
-        "message": message
+        "message": message,
     }
-    return response
 
 
-
-def error_response(user_id, flow_hash,message = ""):
-    log("\"%s\" is request but error" % (user_id))
-    response = {
+def error_response(user_id: str, flow_hash: str, message: str = "") -> dict:
+    log(f'"{user_id}" request failed: {message}')
+    return {
         "user_id": user_id,
         "type": "error",
         "hash": flow_hash,
-
-        "message": message
+        "message": message,
     }
-    return response
-

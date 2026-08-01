@@ -1,7 +1,6 @@
 # ================================
 # @File         : Predict.py
 # @Time         : 2025/08/02
-# @Author       : Yingrui Chen
 # @description  : 用于人脸预测，主函数：cv2_predict()
 #                 输入一组二进制图像列表、置信度阀值
 #                 输出预测的用户ID
@@ -10,8 +9,8 @@
 import time
 import numpy as np
 
-from model_loader import get_components, load_knn_model
-from utils.face_utils import (
+from .model_loader import get_components, load_knn_model
+from .utils.face_utils import (
     extract_features, normalize_features
 )
 
@@ -126,8 +125,8 @@ def cv2_predict(face_images, min_acc=0.96):
 if __name__ == "__main__":
     # 单张照片测试
     import cv2
-    from face_fetcher import face_fetcher
-    from utils.face_utils import img_to_bin
+    from .face_fetcher import face_fetcher
+    from .utils.face_utils import img_to_bin
 
     test_img = cv2.imread("./facedata/51.jpg")  # 读取图像
     test_img = img_to_bin(test_img)  # 转二进制

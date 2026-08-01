@@ -1,7 +1,6 @@
 # ================================
 # @File         : KNN.py
 # @Time         : 2025/08/02
-# @Author       : Yingrui Chen
 # @description  : 基于MindSpore的KNN分类器
 # ================================
 

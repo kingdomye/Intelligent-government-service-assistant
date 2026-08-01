@@ -1,3 +1,5 @@
-from classify.classify import classify,type_dic
+from .classify import classify, type_dic
+
+__all__ = ["classify", "type_dic"]
 
 __all__ = ['classify','type_dic']

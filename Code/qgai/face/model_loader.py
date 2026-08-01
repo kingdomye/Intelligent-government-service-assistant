@@ -1,16 +1,16 @@
 # ================================
 # @File         : model_loader.py
 # @Time         : 2025/07/24
-# @Author       : Yingrui Chen
 # @description  : 人脸贝叶斯模型初始化器，负责配置路径、日志和加载基础模型组件
 # ================================
 
 import logging
 import os
 import time
+from pathlib import Path
 import cv2
 import joblib
-from utils.KNN import KNNClassifier
+from .utils.KNN import KNNClassifier
 
 # 配置日志
 logging.basicConfig(
@@ -25,13 +25,14 @@ class FaceModelLoader:
 
     def __init__(self):
         # 初始化路径
-        self.trainer_dir = 'face_models'
-        self.face_data_path = 'facedata'
-        self.insightface_model_path = "face_models/face_fetcher.pkl"
+        runtime_dir = Path(os.getenv("QGAI_RUNTIME_DIR", "runtime"))
+        self.trainer_dir = runtime_dir / "face_models"
+        self.face_data_path = runtime_dir / "facedata"
+        self.insightface_model_path = self.trainer_dir / "face_fetcher.pkl"
 
         # 模型和数据文件路径
-        self.knn_model_path = os.path.join(self.trainer_dir, 'knn_model.pkl')
-        self.knn_history_data_path = os.path.join(self.trainer_dir, 'knn_history_data.pkl')
+        self.knn_model_path = self.trainer_dir / "knn_model.pkl"
+        self.knn_history_data_path = self.trainer_dir / "knn_history_data.pkl"
 
         # 模型组件
         self.rec_model = None
@@ -45,29 +46,29 @@ class FaceModelLoader:
     def _setup_directories(self):
         """确保训练结果目录存在"""
         try:
-            os.makedirs(self.trainer_dir, exist_ok=True)
+            self.trainer_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             logger.error(f"创建训练目录失败: {e}")
             raise
 
     def _validate_data_path(self):
         """验证人脸数据路径是否有效"""
-        if not os.path.exists(self.face_data_path):
+        if not self.face_data_path.exists():
             logger.error(f"人脸数据路径不存在: {self.face_data_path}")
             raise FileNotFoundError(f"人脸数据路径不存在: {self.face_data_path}")
 
-        if not os.path.isdir(self.face_data_path):
+        if not self.face_data_path.is_dir():
             logger.error(f"人脸数据路径不是一个目录: {self.face_data_path}")
             raise NotADirectoryError(f"人脸数据路径不是一个目录: {self.face_data_path}")
 
     def _load_rec_model(self):
         """加载预训练的人脸特征提取模型（InsightFace）"""
         try:
-            if not os.path.exists(self.insightface_model_path):
-                logger.error("InsightFace特征提取模型不存在:{self.insightface_model_path}")
+            if not self.insightface_model_path.exists():
+                logger.error("InsightFace特征提取模型不存在: %s", self.insightface_model_path)
                 raise FileNotFoundError(self.insightface_model_path)
 
-            self.rec_model = joblib.load(self.insightface_model_path)
+            self.rec_model = joblib.load(str(self.insightface_model_path))
 
         except Exception as e:
             logger.error(f"加载特征提取模型失败: {e}")
@@ -82,7 +83,7 @@ class FaceModelLoader:
         ]
 
         for detector_path in detector_paths:
-            if not os.path.exists(detector_path):
+            if not Path(detector_path).exists():
                 logger.warning(f"检测器文件不存在: {detector_path}")
                 continue
 
@@ -130,13 +131,13 @@ def get_components():
 
 def load_knn_model(model_path):
     try:
-        if os.path.exists(model_path):
-            knn_clf = joblib.load(model_path)
+        if Path(model_path).exists():
+            knn_clf = joblib.load(str(model_path))
             return knn_clf
         else:
             return KNNClassifier()
     except Exception as e:
-        logger.error("初始化KNN模型失败：{e}")
+        logger.error("初始化KNN模型失败：%s", e)
         raise
 
 

@@ -1,131 +1,151 @@
-import http
-import json
+"""HTTP transport for user-session operations."""
+
+from __future__ import annotations
+
 import hashlib
-import base64
+import http.server
+import json
+from typing import Any
 
-import http.server as httpserver
+from ..user import AsyncModel, LoopBed, User
+from .console import log
+from .variable_pool import (
+    aes_cipher,
+    error_response,
+    http_host,
+    http_port,
+    processing_response,
+    user_dic,
+    user_lock,
+)
 
-
-from user import User,TableFiller,AsyncModel,AsyncPredictLooper,AsyncTrainLooper,LoopBed
-
-from server.console import log
-from server.cipher import AESCipher,ChiperBase
-from lang import translate
-from variable_pool import error_response,processing_response
-
-
-from server.variable_pool import http_host,http_port,user_dic,loop_beds
-
-__all__=['run']
-
-ip= http_host + ":" + str(http_port)
-hash_obj = hashlib.sha256()
-
+__all__ = ["Handler", "run"]
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    #跨域配置
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+    server_version = "QGAI/1.1"
+
+    def _cors_headers(self) -> None:
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+    def _send_json(self, payload: dict[str, Any], status: int = 200) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self._cors_headers()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-    def do_GET(self):
-        self.wfile.write(b"\x59\x7D\x54\xE5\x54\xE5\x4E\xBA\x5B\xB6\x60\xF3\x89\x81\x4F\x60post\x62\x11\xFF\x0C\x4E\x0D\x89\x81get\x4E\x0D\x89\x81get\x4E\x0D\x89\x81get\x4E\x0D\x89\x81get\x4E\x0D\x89\x81get\x4E\x0D\x89\x81get")
-        self.wfile.flush()
-        return
-    def do_POST(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Content-Type', 'application/json')
+        self.wfile.write(body)
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self._cors_headers()
         self.end_headers()
-        # 请求内容长度
-        content_length = int(self.headers.get("Content-Length", 0))
 
-        # 请求内容
-        request = json.loads(aes_cipher.base64_de_str(self.rfile.read(content_length).decode("utf8")))
-        self.wfile.write(aes_cipher.str_en_base64(json.dumps(self.respond(request),ensure_ascii=False)).encode("utf8"))
-        self.wfile.flush()
+    def do_GET(self) -> None:
+        self._send_json({"status": "ok", "service": "qgai"})
 
+    def do_POST(self) -> None:
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length <= 0:
+                raise ValueError("request body is empty")
+            encrypted_body = self.rfile.read(content_length).decode("utf-8")
+            request = json.loads(aes_cipher.base64_de_str(encrypted_body))
+            response = self.respond(request)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError, KeyError) as exc:
+            self._send_json({"type": "error", "message": str(exc)}, status=400)
+            return
+        except Exception as exc:
+            log(f"unhandled HTTP request error: {exc}")
+            self._send_json({"type": "error", "message": "internal server error"}, status=500)
+            return
 
+        encoded = aes_cipher.str_en_base64(json.dumps(response, ensure_ascii=False))
+        body = encoded.encode("utf-8")
+        self.send_response(200)
+        self._cors_headers()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
-    def respond(self,request)->dict:
-        # 用户id
-        user_id = request["user_id"]
-        # 请求类型
-        req_type = request["type"]
-        #哈希
-        req_hash = hashlib.sha256(json.dumps(request).encode("utf8")).hexdigest() if "hash" not in request or request["hash"] == "" else request["hash"]
+    def respond(self, request: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(request, dict):
+            raise ValueError("request must be a JSON object")
+        user_id = str(request["user_id"]).strip()
+        request_type = str(request["type"]).strip()
+        if not user_id:
+            raise ValueError("user_id must not be empty")
 
-        # 响应必要信息
-        response = {
-            "user_id": user_id,
-            "type": "busy",
-            "hash": req_hash
-        }
+        request_hash = request.get("hash") or hashlib.sha256(
+            json.dumps(request, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()
 
-        # 握手时创建新用户
-        if user_id not in user_dic and req_type == "handshake":
-            log("(%s)a new user handshake" % ip)
-
-            # 初始化用户+填入信息，开启异步循环
-            user = User(request["info"],LoopBed().looping_on_new_thread())
-            user_dic[user_id] = user
-
-            #响应
-            response["type"] = "handshake"
-            response["message"] = "success"
-            return response
-
-        # 在握手前使用，报错
-        if user_id not in user_dic:
-            return error_response(user_id,req_hash,"use this user_in before handshake")
-
-
-
-
-        # 获取用户
-        user = user_dic[user_id]
-        # 初始化分类响应
-        if req_type == "classify":
-            log("classify----user_id:%s" % user_id)
-
-            # 调用初始化异步模块
-            user.init(request["input"]["text"])
-            # 未完成
-            if not user.init.done:
-                return processing_response(user_id, req_hash)
-            #完成，响应
-            else:
-                response["type"] = "classify"
-                response["classify"] = user.bus_type
-                response["flow"] = user.flow
-                user.classify(request["input"]["text"])
-
-        #数据库储存请求
-        elif req_type == "storage":
-            response["type"] = "storage"
-            response["output"] = user.main_info
-        #总结
-        elif req_type == "summary":
-            flow = user.get_flow()
-
-            if not user.get_flow.done:
-                return processing_response(user_id,req_hash)
-
-            response["type"] = "summary"
-            response["output"] = {
-                "tables":user.export_tables(),
-                "classify":user.bus_type,
-                "flow":flow
+        if request_type == "handshake":
+            info = request.get("info")
+            if not isinstance(info, dict):
+                raise ValueError("handshake.info must be an object")
+            with user_lock:
+                if user_id not in user_dic:
+                    user_dic[user_id] = User(info, LoopBed().looping_on_new_thread())
+            return {
+                "user_id": user_id,
+                "type": "handshake",
+                "hash": request_hash,
+                "message": "success",
             }
-        return response
+
+        with user_lock:
+            user = user_dic.get(user_id)
+        if user is None:
+            return error_response(user_id, request_hash, "handshake is required")
+
+        if request_type == "classify":
+            input_data = request.get("input")
+            if not isinstance(input_data, dict) or not isinstance(input_data.get("text"), str):
+                raise ValueError("classify.input.text must be a string")
+            result = user.init(input_data["text"])
+            if result == AsyncModel.processing:
+                return processing_response(user_id, request_hash)
+            return {
+                "user_id": user_id,
+                "type": "classify",
+                "hash": request_hash,
+                "classify": user.bus_type,
+                "flow": user.flow,
+            }
+
+        if request_type == "storage":
+            return {
+                "user_id": user_id,
+                "type": "storage",
+                "hash": request_hash,
+                "output": user.main_info,
+            }
+
+        if request_type == "summary":
+            return {
+                "user_id": user_id,
+                "type": "summary",
+                "hash": request_hash,
+                "output": {
+                    "tables": user.export_tables(),
+                    "classify": user.bus_type,
+                    "flow": user.flow,
+                },
+            }
+
+        return error_response(user_id, request_hash, f"unknown request type: {request_type}")
+
+    def log_message(self, message_format: str, *args: Any) -> None:
+        log(message_format % args, "HTTP")
 
 
-def run():
-    web = httpserver.ThreadingHTTPServer((http_host, http_port), Handler)
-    log("a new http listener open on %s"%ip)
+def run() -> None:
+    address = (http_host, http_port)
+    web = http.server.ThreadingHTTPServer(address, Handler)
+    log(f"HTTP listener started on {http_host}:{http_port}")
     web.serve_forever()
-    while True:
-        command = input("console@%s:~$"%ip)

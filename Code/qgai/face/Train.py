@@ -1,7 +1,6 @@
 # ================================
 # @File         : Train.py
 # @Time         : 2025/08/02
-# @Author       : Yingrui Chen
 # @description  : 对输入的图片进行预处理以及模型训练
 #                 主函数cv2_train(imgs_bin, user_id, min_acc=0.6)
 #                 传入二进制图片数组、用户ID以及准确率阀值
@@ -15,9 +14,9 @@ import random
 import joblib
 import numpy as np
 
-from Predict import single_face_image_predict
-from model_loader import get_components, load_knn_model
-from utils.face_utils import (
+from .Predict import single_face_image_predict
+from .model_loader import get_components, load_knn_model
+from .utils.face_utils import (
     extract_features, normalize_features
 )
 
@@ -166,7 +165,7 @@ if __name__ == "__main__":
     # imgs_bin = [test_img_bin]
     # cv2_train(imgs_bin, user_id=2)
     import pickle
-    from face_fetcher import face_fetcher
+    from .face_fetcher import face_fetcher
 
     with open("./facedata/face_shen_bin_data.pkl", "rb") as f:
         data = pickle.load(f)

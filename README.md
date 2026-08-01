@@ -1,31 +1,81 @@
-# 基于MindSpore的多智能体协同辅助政务服务助手
+# 基于 MindSpore 的多智能体协同辅助政务服务助手
 
-> 痛点问题：对于农村人群，及患有老花等症状等的人群，在数字化的现代政务服务场景中，出现不会填写各种政务表单、不知道如何在政务大厅的办理业务、担心泄露隐私，以及缺乏基本表单理解能力等一系列问题。
 [![DOI](https://zenodo.org/badge/1023408577.svg)](https://doi.org/10.5281/zenodo.19511336)
-------
+[![CI](https://github.com/yruichen/Intelligent-government-service-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/yruichen/Intelligent-government-service-assistant/actions/workflows/ci.yml)
 
-### 前端部署
+本项目面向不熟悉数字政务、存在视力或阅读障碍等情况的用户，提供业务分类、材料问答、表单辅助填写、流程生成、人脸识别和语音交互能力。
 
-1. 进入 front 文件夹
-2. 安装依赖包
+## 当前状态
 
-```bash
-cd front
-npm init
-npm install vite --save-dev
-```
+仓库中的 Python 服务已经整理为可安装的 `qgai` 包。模型与训练环境体积较大，默认不随源码分发；相关能力首次调用时才加载。前端源码和 Java 服务源码当前不在本仓库中，因此旧文档中的 `Code/front` 启动步骤不再有效。
 
-3. 用 vite 运行
+## 快速开始
+
+要求 Python 3.10 或更高版本。
 
 ```bash
-npm run dev
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+cp .env.example .env
+qgai
 ```
 
-## 许可证（License）
+默认监听本机地址：
 
-本项目采用 [MIT 许可证](LICENSE) 开源，您可以自由地使用、复制、修改、合并、发布、分发、再许可和/或销售本软件的副本，前提是符合以下条件：
+- HTTP：`127.0.0.1:10925`
+- 业务 WebSocket：`127.0.0.1:4440`
+- 工具 WebSocket：`127.0.0.1:3304`
 
-1. **保留版权声明和许可证声明**：在软件的所有副本或重要部分中，必须包含原作者的版权声明和本许可证的完整文本（即项目根目录下的 `LICENSE` 文件）。
-2. **免责声明**：本软件按“原样”提供，不提供任何明示或暗示的担保，包括但不限于对适销性、特定用途适用性的担保。在任何情况下，作者或版权持有人均不对因使用本软件或本软件的衍生作品而产生的任何索赔、损害或其他责任承担责任。
+若需要模型能力，按需安装额外依赖：
 
-如需完整的许可证条款，请查阅项目根目录下的 [LICENSE](LICENSE) 文件。
+```bash
+pip install -e '.[qa]'
+pip install -e '.[speech]'
+pip install -e '.[face]'
+pip install -e '.[local-llm]'
+```
+
+MindSpore、bitsandbytes 等依赖受操作系统、Python 版本和硬件平台限制，请按部署机器选择兼容版本。环境变量及模型路径见 [.env.example](.env.example)。
+
+## 配置
+
+配置统一通过环境变量传入，不在源码中保存密钥或机器路径。常用变量包括：
+
+| 变量 | 用途 | 默认值 |
+| --- | --- | --- |
+| `HF_API_TOKEN` | Hugging Face 远程业务分类 | 无 |
+| `QGAI_BASE_MODEL_PATH` | 本地基础大模型路径 | 无 |
+| `QGAI_LORA_MODEL_PATH` | 本地 LoRA 权重路径 | 无 |
+| `QGAI_QA_MODEL_PATH` | 问答模型权重路径 | 包内约定路径 |
+| `QGAI_WHISPER_MODEL` | Whisper 模型名或路径 | `medium` |
+| `QGAI_AES_KEY` | 可选传输加密密钥 | 无（明文 JSON） |
+
+服务默认只绑定回环地址。只有在明确配置了防火墙、认证、TLS 和反向代理后，才建议绑定 `0.0.0.0`。
+
+## 开发
+
+本地验证不需要下载模型：
+
+```bash
+python -m compileall -q Code/qgai
+python scripts/check_repository_hygiene.py
+```
+
+依赖、包入口和可选能力统一维护在 `pyproject.toml`。工程边界与后续拆分方向见 [docs/architecture.md](docs/architecture.md)。
+
+## 仓库卫生与安全
+
+以下内容不应提交到 Git：
+
+- `.env`、API 密钥和加密密钥；
+- 模型权重、虚拟环境和训练中间产物；
+- JAR、ZIP、音视频样例等构建或演示制品；
+- IDE 配置、缓存和运行时生成文件；
+- 未脱敏训练语料、真实表单、个人照片、任务书和答辩材料。
+
+二进制发布物应放在 GitHub Releases、对象存储或模型仓库中，并在发布说明中提供校验值。此前暴露过的 ModelArts 密钥必须立即吊销；详见 [SECURITY.md](SECURITY.md)。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE)。
